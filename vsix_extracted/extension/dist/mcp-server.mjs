@@ -21005,6 +21005,7 @@ var MCP_DISPLAY_NAME = "Cursor Messenger";
 var DATA_DIR = process.env.MESSENGER_DATA_DIR || path.join(os.homedir(), ".cursor-mcp-messenger");
 var QUEUE_FILE = path.join(DATA_DIR, "queue.json");
 var CURRENT_SESSION_FILE = path.join(DATA_DIR, "current_session.json");
+var KNOWN_SESSIONS_FILE = path.join(DATA_DIR, "known_sessions.json");
 var QUESTION_FILE = path.join(DATA_DIR, "question.json");
 var ANSWER_FILE = path.join(DATA_DIR, "answer.json");
 var REPLY_FILE = path.join(DATA_DIR, "reply.json");
@@ -21213,6 +21214,24 @@ server.tool(
       "utf-8"
     );
     await appendServerLog("info", `register_session: ${session_tag}`);
+    try {
+      let list = [];
+      try {
+        const raw2 = await fs.readFile(KNOWN_SESSIONS_FILE, "utf-8");
+        const data2 = JSON.parse(raw2);
+        list = Array.isArray(data2) ? data2 : [];
+      } catch {
+      }
+      const now2 = (/* @__PURE__ */ new Date()).toISOString();
+      const idx2 = list.findIndex((x) => x && x.session_tag === session_tag);
+      if (idx2 >= 0) {
+        list[idx2] = { session_tag, label: list[idx2].label || session_tag, updated_at: now2 };
+      } else {
+        list.push({ session_tag, label: session_tag, updated_at: now2 });
+      }
+      await fs.writeFile(KNOWN_SESSIONS_FILE, JSON.stringify(list, null, 2), "utf-8");
+    } catch {
+    }
     return { content: [{ type: "text", text: `[system] \u5DF2\u5C06\u4F1A\u8BDD\u6CE8\u518C\u4E3A ${session_tag}\u3002\u4E4B\u540E\u8BF7\u5728\u672C\u5BF9\u8BDD\u4E2D\u8C03\u7528 check_messages \u65F6\u59CB\u7EC8\u4F20\u5165 session_tag: "${session_tag}"\u3002` }] };
   }
 );

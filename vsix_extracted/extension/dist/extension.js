@@ -95,7 +95,10 @@ function writeQueue(items) {
   ensureDir();
   fs.writeFileSync(queueFile(), JSON.stringify(items, null, 2), "utf-8");
 }
-function getCurrentSessionId() {
+function manualSessionTargetFile() {
+  return path.join(getDataDir(), "manual_session_target.json");
+}
+function getAiRegisteredSessionId() {
   const file = path.join(getDataDir(), "current_session.json");
   if (!fs.existsSync(file))
     return null;
@@ -106,6 +109,83 @@ function getCurrentSessionId() {
   } catch {
     return null;
   }
+}
+function getManualSessionOverrideTag() {
+  try {
+    const mf = manualSessionTargetFile();
+    if (!fs.existsSync(mf))
+      return null;
+    const o = JSON.parse(fs.readFileSync(mf, "utf-8"));
+    if (o && o.mode === "fixed" && typeof o.session_tag === "string" && o.session_tag)
+      return o.session_tag;
+  } catch {
+  }
+  return null;
+}
+function getSessionTargetMode() {
+  try {
+    const mf = manualSessionTargetFile();
+    if (!fs.existsSync(mf))
+      return "follow";
+    const o = JSON.parse(fs.readFileSync(mf, "utf-8"));
+    return o && o.mode === "fixed" ? "fixed" : "follow";
+  } catch {
+    return "follow";
+  }
+}
+function getCurrentSessionId() {
+  ensureDir();
+  const manual = getManualSessionOverrideTag();
+  if (manual)
+    return manual;
+  return getAiRegisteredSessionId();
+}
+function readKnownSessionsList() {
+  ensureDir();
+  const f = path.join(getDataDir(), "known_sessions.json");
+  if (!fs.existsSync(f))
+    return [];
+  try {
+    const data = JSON.parse(fs.readFileSync(f, "utf-8"));
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+function readSessionLabels() {
+  const f = path.join(getDataDir(), "session_labels.json");
+  if (!fs.existsSync(f))
+    return {};
+  try {
+    const data = JSON.parse(fs.readFileSync(f, "utf-8"));
+    return data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+function mergeSessionsWithLabels() {
+  const list = readKnownSessionsList();
+  const labels = readSessionLabels();
+  return list.map((s) => {
+    const tag = s?.session_tag;
+    if (typeof tag !== "string")
+      return null;
+    return {
+      session_tag: tag,
+      label: typeof labels[tag] === "string" && labels[tag] ? labels[tag] : (s.label || tag),
+      updated_at: s.updated_at
+    };
+  }).filter(Boolean);
+}
+var lastSessionStateJson = "";
+function buildSessionStateMessage() {
+  return {
+    type: "sessionState",
+    targetMode: getSessionTargetMode(),
+    aiSession: getAiRegisteredSessionId(),
+    activeSession: getCurrentSessionId(),
+    sessions: mergeSessionsWithLabels()
+  };
 }
 function sendText(text, sessionId) {
   const queue = readQueue();
@@ -1106,6 +1186,14 @@ function startPolling() {
       mainPanel.webview.postMessage({ type: "queueCount", count, queue });
       lastQueueCount = count;
     }
+    if (forceSync) {
+      const sm = buildSessionStateMessage();
+      const sj = JSON.stringify(sm);
+      if (sj !== lastSessionStateJson) {
+        mainPanel.webview.postMessage(sm);
+        lastSessionStateJson = sj;
+      }
+    }
   };
   poll();
   pollTimer2 = setInterval(poll, 500);
@@ -1192,6 +1280,52 @@ var MessengerViewProvider = class {
           break;
         case "fetchUsage":
           this.handleFetchUsage();
+          break;
+        case "setSessionTarget":
+          ensureDir();
+          if (msg.mode === "fixed" && typeof msg.session_tag === "string" && msg.session_tag) {
+            fs.writeFileSync(
+              manualSessionTargetFile(),
+              JSON.stringify({ mode: "fixed", session_tag: msg.session_tag }, null, 2),
+              "utf-8"
+            );
+          } else {
+            try {
+              fs.unlinkSync(manualSessionTargetFile());
+            } catch {
+            }
+          }
+          lastSessionStateJson = "";
+          if (mainPanel) {
+            const sm = buildSessionStateMessage();
+            lastSessionStateJson = JSON.stringify(sm);
+            mainPanel.webview.postMessage(sm);
+            const sid2 = getCurrentSessionId();
+            const q2 = readQueue(sid2);
+            mainPanel.webview.postMessage({ type: "queueCount", count: q2.length, queue: q2 });
+            lastQueueCount = q2.length;
+          }
+          break;
+        case "setSessionLabel":
+          if (typeof msg.session_tag === "string" && typeof msg.label === "string") {
+            ensureDir();
+            const lab = readSessionLabels();
+            if (msg.label.trim())
+              lab[msg.session_tag] = msg.label.trim();
+            else
+              delete lab[msg.session_tag];
+            fs.writeFileSync(
+              path.join(getDataDir(), "session_labels.json"),
+              JSON.stringify(lab, null, 2),
+              "utf-8"
+            );
+          }
+          lastSessionStateJson = "";
+          if (mainPanel) {
+            const sm2 = buildSessionStateMessage();
+            lastSessionStateJson = JSON.stringify(sm2);
+            mainPanel.webview.postMessage(sm2);
+          }
           break;
       }
     });
@@ -1280,6 +1414,9 @@ var MessengerViewProvider = class {
       input: saved?.input ?? "",
       history: Array.isArray(saved?.history) ? saved.history : []
     });
+    const sm = buildSessionStateMessage();
+    lastSessionStateJson = JSON.stringify(sm);
+    mainPanel.webview.postMessage(sm);
   }
   async handleFetchUsage() {
     if (!mainPanel)

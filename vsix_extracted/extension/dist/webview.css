@@ -83,6 +83,62 @@ body {
 .attach-remove:hover {
   filter: brightness(1.08);
 }
+.session-target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.session-target-label {
+  font-size: 0.85em;
+  color: var(--vscode-descriptionForeground);
+  white-space: nowrap;
+}
+.session-select {
+  flex: 1;
+  min-width: 120px;
+  max-width: 100%;
+  padding: 6px 8px;
+  font-size: inherit;
+  font-family: inherit;
+  color: var(--vscode-dropdown-foreground);
+  background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border);
+  border-radius: 4px;
+  outline: none;
+}
+.session-select:focus {
+  border-color: var(--vscode-focusBorder);
+}
+.session-rename-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.session-rename-input {
+  flex: 1;
+  min-width: 100px;
+  padding: 6px 10px;
+  font-size: 0.9em;
+  font-family: inherit;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  border-radius: 4px;
+}
+.session-rename-btn {
+  padding: 6px 12px;
+  font-size: 0.9em;
+  cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+}
+.session-rename-btn:hover {
+  background: var(--vscode-button-secondaryHoverBackground);
+}
 .buttons {
   display: flex;
   gap: 8px;
