@@ -1,0 +1,67 @@
+{
+  "name": "cursor-mcp-messenger",
+  "displayName": "Cursor Messenger",
+  "description": "Cursor Messenger - MCP 旁路通信（文件 IPC，check_messages/ask_question），与 xw 原理一致",
+  "version": "1.1.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cursorMcpMessenger",
+          "title": "Cursor Messenger",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "cursorMcpMessenger": [
+        {
+          "type": "webview",
+          "id": "cursorMcpMessenger.mainView",
+          "name": "Cursor Messenger"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "cursorMcpMessenger.setupMcp", "title": "Cursor Messenger: 安装 MCP 配置" },
+      { "command": "cursorMcpMessenger.removeMcp", "title": "Cursor Messenger: 卸载 MCP 配置" },
+      { "command": "cursorMcpMessenger.sendFile", "title": "Cursor Messenger: 发送文件到输入框" },
+      { "command": "cursorMcpMessenger.openConsole", "title": "Cursor Messenger: 打开远程控制台" }
+    ],
+    "menus": {
+      "explorer/context": [
+        { "command": "cursorMcpMessenger.sendFile", "group": "navigation@100" }
+      ]
+    }
+  },
+  "scripts": {
+    "compile:ext": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "compile:css": "node -e \"require('fs').copyFileSync('src/webview/webview.css','dist/webview.css')\"",
+    "compile:webview": "esbuild src/webview/index.tsx --bundle --outfile=dist/webview.js --format=iife --platform=browser --minify && npm run compile:css",
+    "compile:mcp": "esbuild mcp-server/index.ts --bundle --outfile=dist/mcp-server.mjs --format=esm --platform=node",
+    "compile": "npm run compile:ext && npm run compile:webview && npm run compile:mcp",
+    "watch:ext": "npm run compile:ext -- --watch",
+    "watch:webview": "npm run compile:webview -- --watch",
+    "package": "npm run compile && npx @vscode/vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/vscode": "^1.80.0",
+    "esbuild": "^0.20.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}
