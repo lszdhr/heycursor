@@ -6,7 +6,7 @@
 
 - **左侧面板**：输入消息（文字、图片、文件），待发队列，AI 提问与回复摘要弹窗，最近发送历史。
 - **MCP 工具**：`register_session(session_id)`（注册当前对话的会话 ID，同工作区多会话时必用）、`check_messages(session_id?, reply?)`（轮询用户消息，可带 `reply` 推送摘要；多会话时需带 `session_id`）、`ask_question`（向用户提问并等待选择）。
-- **等待与超时**：单次最多等待 `MAX_WAIT_MS`（默认 2 分钟），超时后返回 [system] 要求再次调用；等待期间每 `HEARTBEAT_INTERVAL`（默认 8 秒）发日志不 return，避免掉线。
+- **等待与超时**：单次最多等待 `MAX_WAIT_MS`（默认 30 分钟，与 1.1.1 / wait30m 一致），超时后返回 [system] 要求再次调用；等待期间每 `HEARTBEAT_INTERVAL`（默认 8 秒）发日志不 return，避免掉线。
 - **规则**：安装 MCP 配置时写入 `~/.cursor/rules/mcp-messenger.mdc`。
 - **全局安装**：MCP 配置安装到全局（`~/.cursor/mcp.json` 与规则），Win/Mac 通用（`os.homedir()` 跨平台）；激活时若检测到全局或工作区无配置，自动安装到全局。
 - **数据目录**：全局安装时使用 `~/.cursor-mcp-messenger/`；**有工作区时**为首个工作区写入 `.cursor/mcp.json` 并使用该工作区独立数据目录（`~/.cursor-mcp-messenger/<hash>/`），多窗口/多会话互不串消息。

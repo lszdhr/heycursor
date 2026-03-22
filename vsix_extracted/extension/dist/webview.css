@@ -38,6 +38,51 @@ body {
 .input-row textarea::placeholder {
   color: var(--vscode-input-placeholderForeground);
 }
+.attach-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: flex-start;
+}
+.attach-tile {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--vscode-input-border);
+  flex-shrink: 0;
+  background: var(--vscode-input-background);
+}
+.attach-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.attach-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  line-height: 16px;
+  font-size: 12px;
+  font-weight: 700;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--vscode-button-foreground);
+  background: rgba(220, 53, 69, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.attach-remove:hover {
+  filter: brightness(1.08);
+}
 .buttons {
   display: flex;
   gap: 8px;

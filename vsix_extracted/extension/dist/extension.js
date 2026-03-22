@@ -134,6 +134,23 @@ function sendImage(filePath, caption, sessionId) {
   queue.push(item);
   writeQueue(queue);
 }
+function queueImageFromDataUrl(dataUrl, caption, sessionId) {
+  try {
+    const match = dataUrl.match(/^data:image\/([\w+.-]+);base64,(.+)$/);
+    if (!match)
+      return false;
+    const mimePart = match[1].toLowerCase();
+    const ext = (mimePart === "jpeg" ? "jpg" : mimePart.split("+")[0]).replace(/[^a-z0-9]/g, "") || "png";
+    const buf = Buffer.from(match[2], "base64");
+    const name = "cursor_mcp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8) + "." + ext;
+    const tmpPath = path3.join(os3.tmpdir(), name);
+    fs3.writeFileSync(tmpPath, buf);
+    sendImage(tmpPath, caption, sessionId);
+    return true;
+  } catch {
+    return false;
+  }
+}
 function sendFile(filePath, suffix, sessionId) {
   const queue = readQueue();
   const item = {
@@ -1146,6 +1163,12 @@ var MessengerViewProvider = class {
         case "sendImage":
           this.handleSendImage(msg.caption);
           break;
+        case "pickImageStage":
+          void this.handlePickImageStage();
+          break;
+        case "sendComposed":
+          this.handleSendComposed(msg);
+          break;
         case "sendPastedImage":
           if (msg.dataUrl != null)
             this.handlePastedImage(msg.dataUrl, msg.caption);
@@ -1182,19 +1205,49 @@ var MessengerViewProvider = class {
     });
   }
   handlePastedImage(dataUrl, caption) {
-    try {
-      const match = dataUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-      if (!match)
-        return;
-      const ext = (match[1] === "jpeg" ? "jpg" : match[1]).toLowerCase().replace(/[^a-z0-9]/g, "") || "png";
-      const buf = Buffer.from(match[2], "base64");
-      const name = "cursor_mcp_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8) + "." + ext;
-      const tmpPath = path3.join(os3.tmpdir(), name);
-      fs3.writeFileSync(tmpPath, buf);
-      sendImage(tmpPath, caption, getCurrentSessionId());
+    if (queueImageFromDataUrl(dataUrl, caption, getCurrentSessionId()))
       triggerCursorChat();
+  }
+  async handlePickImageStage() {
+    if (!mainPanel)
+      return;
+    const uris = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { Images: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"] }
+    });
+    if (!uris?.[0])
+      return;
+    try {
+      const buf = fs3.readFileSync(uris[0].fsPath);
+      const ext = path3.extname(uris[0].fsPath).toLowerCase().replace(/^\./, "") || "png";
+      const mimeMap = {
+        png: "image/png",
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        gif: "image/gif",
+        webp: "image/webp",
+        bmp: "image/bmp",
+        svg: "image/svg+xml"
+      };
+      const mime = mimeMap[ext] || "image/png";
+      const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+      mainPanel.webview.postMessage({ type: "stagedImagePick", dataUrl });
     } catch {
     }
+  }
+  handleSendComposed(msg) {
+    const text = typeof msg.text === "string" ? msg.text : "";
+    const images = Array.isArray(msg.images) ? msg.images : [];
+    const sid = getCurrentSessionId();
+    const t = text.trim();
+    if (t)
+      sendText(t, sid);
+    for (const im of images) {
+      if (im && typeof im.dataUrl === "string")
+        queueImageFromDataUrl(im.dataUrl, void 0, sid);
+    }
+    if (t || images.length > 0)
+      triggerCursorChat();
   }
   async handleSendImage(caption) {
     const uris = await vscode.window.showOpenDialog({
