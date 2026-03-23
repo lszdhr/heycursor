@@ -131,13 +131,7 @@ body {
   padding: 6px 12px;
   font-size: 0.9em;
   cursor: pointer;
-  border: none;
   border-radius: 4px;
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-}
-.session-rename-btn:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
 }
 .buttons {
   display: flex;
@@ -145,16 +139,41 @@ body {
   flex-wrap: wrap;
 }
 .buttons button {
-  padding: 6px 12px;
+  padding: 6px 14px;
   font-size: inherit;
-  color: var(--vscode-button-foreground);
-  background: var(--vscode-button-background);
-  border: none;
-  border-radius: 4px;
+  font-weight: 600;
+  border-radius: 6px;
   cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
-.buttons button:hover {
-  background: var(--vscode-button-hoverBackground);
+/* 与输入框同系配色，贴近周围区域：保存名称、发送、文件、重发、队列删除、提交/取消、关闭回复 */
+.session-rename-btn,
+.buttons button,
+.queue-list li .del,
+.history-list li .resend,
+.question-box .q-actions button,
+.reply-card-close {
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
+  box-shadow: inset 0 1px 0 rgba(127, 127, 127, 0.07);
+}
+.session-rename-btn:hover,
+.buttons button:hover,
+.queue-list li .del:hover,
+.history-list li .resend:hover,
+.question-box .q-actions button:hover,
+.reply-card-close:hover {
+  background: var(--vscode-list-hoverBackground, var(--vscode-input-background));
+  border-color: var(--vscode-focusBorder, var(--vscode-input-border));
+}
+.session-rename-btn:active,
+.buttons button:active,
+.queue-list li .del:active,
+.history-list li .resend:active,
+.question-box .q-actions button:active,
+.reply-card-close:active {
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 .queue-section h4,
 .history-section h4,
@@ -202,17 +221,11 @@ body {
 }
 .queue-list li .del,
 .history-list li .resend {
-  padding: 2px 6px;
+  padding: 2px 8px;
   font-size: 0.85em;
   cursor: pointer;
-  border: none;
   border-radius: 4px;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-}
-.queue-list li .del:hover,
-.history-list li .resend:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
+  font-weight: 500;
 }
 .question-box {
   padding: 12px;
@@ -282,13 +295,8 @@ body {
   padding: 2px 8px;
   font-size: 0.85em;
   cursor: pointer;
-  border: none;
   border-radius: 4px;
-  background: var(--vscode-button-secondaryBackground);
-  color: var(--vscode-button-secondaryForeground);
-}
-.reply-card-close:hover {
-  background: var(--vscode-button-secondaryHoverBackground);
+  font-weight: 500;
 }
 .reply-card-body {
   font-size: 0.9em;
