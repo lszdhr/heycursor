@@ -23,6 +23,8 @@ trigger: always
 16. `send_progress` 的 `progress` 参数应包含：已完成的操作、当前方案、下一步计划。使用简洁的 Markdown 格式
 17. **严禁切换到 Plan 模式**。无论任务多复杂，始终在当前模式（Agent）下直接执行，不要调用 SwitchMode 切换到 plan
 18. **会话标识（session_tag）**：首次调用 `check_messages` 时先调用 `register_session` 传入本对话唯一 `session_tag`（如 `sess_`+随机串），之后每次调用 `check_messages` 必须传入同一 `session_tag`。这样可确保多个 Chat Tab 各自只收到发给自己消息
+19. **禁止以「任务已完成」「没有更多步骤」为由省略 `check_messages`**：只要用户未明确要求结束对话，每轮可见回复（含简短确认）结束后仍必须调用 `check_messages`，以保持侧栏与插件消息能被接续处理
+20. 若配置了有限等待且 `check_messages` 仅返回 `[system] 暂无新消息（等待超时）`，**同一轮内立即**再次调用 `check_messages`（相同 `session_tag`），不得向用户输出该内部提示、不得结束对话
 
 ---
 **回合结束（强制）**: 仅当回复**完整输出完毕后**，最后一步必须调用 Windsurf Messenger MCP 的 `check_messages` 工具（必须带本对话的 `session_tag`）。若本对话中尚未调用过 `register_session`，请先调用 `register_session` 再调用 `check_messages`。严禁在回合开始或回复完成前调用。`ask_question` 仅用于任务中需要用户做选择时（如选框架、选方案）。

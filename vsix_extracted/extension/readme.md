@@ -6,7 +6,7 @@
 
 - **左侧面板**：输入消息（文字、图片、文件），待发队列，AI 提问与回复摘要弹窗，最近发送历史。
 - **MCP 工具**：`register_session(session_id)`（注册当前对话的会话 ID，同工作区多会话时必用）、`check_messages(session_id?, reply?)`（轮询用户消息，可带 `reply` 推送摘要；多会话时需带 `session_id`）、`ask_question`（向用户提问并等待选择）。
-- **等待与超时**：单次最多等待 `MAX_WAIT_MS`（默认 30 分钟，与 1.1.1 / wait30m 一致），超时后返回 [system] 要求再次调用；等待期间每 `HEARTBEAT_INTERVAL`（默认 8 秒）发日志不 return，避免掉线。
+- **等待与超时**：默认**无限期**阻塞等待，直到队列有新消息或客户端中断；若设置 `MESSENGER_MAX_WAIT_MS` 为正数毫秒，则单次最长等待该时长，超时后返回 [system] 要求同轮再次调用；等待期间每 `HEARTBEAT_INTERVAL`（默认 8 秒）发心跳日志，减轻长时间阻塞被客户端断开的风险。
 - **规则**：安装 MCP 配置时写入 `~/.cursor/rules/mcp-messenger.mdc`。
 - **全局安装**：MCP 配置安装到全局（`~/.cursor/mcp.json` 与规则），Win/Mac 通用（`os.homedir()` 跨平台）；激活时若检测到全局或工作区无配置，自动安装到全局。
 - **数据目录**：全局安装时使用 `~/.cursor-mcp-messenger/`；**有工作区时**为首个工作区写入 `.cursor/mcp.json` 并使用该工作区独立数据目录（`~/.cursor-mcp-messenger/<hash>/`），多窗口/多会话互不串消息。
@@ -23,7 +23,7 @@
 ## 数据目录与环境变量
 
 - **数据目录**：全局安装时用 `~/.cursor-mcp-messenger/`；工作区安装时用 `~/.cursor-mcp-messenger/<hash>/`（hash 为首工作区路径 MD5 前 12 位）。Win 下 `~` 为 `%USERPROFILE%`，Mac 为 `/Users/用户名`。文件：`queue.json`、`question.json`、`answer.json`、`reply.json`、`server.log`。
-- **MCP 等待**：`MESSENGER_MAX_WAIT_MS` 单次最长等待（默认 1800000，30 分钟，最大不超过 30 分钟）；`MESSENGER_HEARTBEAT_INTERVAL_MS` 心跳日志间隔（默认 8000，8 秒，仅打日志不 return）。
+- **MCP 等待**：`MESSENGER_MAX_WAIT_MS` 未设置或为 `0` / `infinite` / `-1` 时表示**无限等待**；设为**正数毫秒**则单次最长等待该时长（例如 `1800000` = 30 分钟），超时后返回 [system] 提示须同轮重试。`MESSENGER_HEARTBEAT_INTERVAL_MS` 心跳间隔（默认 8000，8 秒）。
 
 ## 使用
 

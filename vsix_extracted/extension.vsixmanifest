@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 	<PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
 		<Metadata>
-			<Identity Language="en-US" Id="cursor-mcp-messenger" Version="1.1.1" Publisher="local" />
+			<Identity Language="en-US" Id="cursor-mcp-messenger" Version="1.1.2" Publisher="local" />
 			<DisplayName>Cursor Messenger</DisplayName>
 			<Description xml:space="preserve">Cursor Messenger - MCP 旁路通信（文件 IPC，check_messages/ask_question），与 xw 原理一致</Description>
 			<Tags></Tags>

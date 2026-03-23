@@ -2,7 +2,7 @@
   "name": "cursor-mcp-messenger",
   "displayName": "Cursor Messenger",
   "description": "Cursor Messenger - MCP 旁路通信（文件 IPC，check_messages/ask_question），与 xw 原理一致",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publisher": "local",
   "license": "MIT",
   "engines": { "vscode": "^1.80.0" },
@@ -48,7 +48,8 @@
     "compile": "npm run compile:ext && npm run compile:webview && npm run compile:mcp",
     "watch:ext": "npm run compile:ext -- --watch",
     "watch:webview": "npm run compile:webview -- --watch",
-    "package": "npm run compile && npx @vscode/vsce package --no-dependencies"
+    "package": "npm run compile && npx @vscode/vsce package --no-dependencies",
+    "verify:webview": "node ../tools/verify-webview.cjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.12.1",

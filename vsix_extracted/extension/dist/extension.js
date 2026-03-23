@@ -790,6 +790,8 @@ alwaysApply: true
 16. \`send_progress\` \u7684 \`progress\` \u53C2\u6570\u5E94\u5305\u542B\uFF1A\u5DF2\u5B8C\u6210\u7684\u64CD\u4F5C\u3001\u5F53\u524D\u65B9\u6848\u3001\u4E0B\u4E00\u6B65\u8BA1\u5212\u3002\u4F7F\u7528\u7B80\u6D01\u7684 Markdown \u683C\u5F0F
 17. **\u4E25\u7981\u5207\u6362\u5230 Plan \u6A21\u5F0F**\u3002\u65E0\u8BBA\u4EFB\u52A1\u591A\u590D\u6742\uFF0C\u59CB\u7EC8\u5728\u5F53\u524D\u6A21\u5F0F\uFF08Agent\uFF09\u4E0B\u76F4\u63A5\u6267\u884C\uFF0C\u4E0D\u8981\u8C03\u7528 SwitchMode \u5207\u6362\u5230 plan
 18. **\u4F1A\u8BDD\u6807\u8BC6\uFF08session_tag\uFF09**\uFF1A\u9996\u6B21\u8C03\u7528 \`check_messages\` \u65F6\u5148\u8C03\u7528 \`register_session\` \u4F20\u5165\u672C\u5BF9\u8BDD\u552F\u4E00 \`session_tag\`\uFF08\u5982 \`sess_\`+\u968F\u673A\u4E32\uFF09\uFF0C\u4E4B\u540E\u6BCF\u6B21\u8C03\u7528 \`check_messages\` \u5FC5\u987B\u4F20\u5165\u540C\u4E00 \`session_tag\`\u3002\u8FD9\u6837\u53EF\u786E\u4FDD\u591A\u4E2A Chat Tab \u5404\u81EA\u53EA\u6536\u5230\u53D1\u7ED9\u81EA\u5DF1\u6D88\u606F
+19. **\u7981\u6B62\u4EE5\u300C\u4EFB\u52A1\u5DF2\u5B8C\u6210\u300D\u300C\u6CA1\u6709\u66F4\u591A\u6B65\u9AA4\u300D\u4E3A\u7531\u7701\u7565 \`check_messages\`**\uFF1A\u53EA\u8981\u7528\u6237\u672A\u660E\u786E\u8981\u6C42\u7ED3\u675F\u5BF9\u8BDD\uFF0C\u6BCF\u8F6E\u53EF\u89C1\u56DE\u590D\uFF08\u542B\u7B80\u77ED\u786E\u8BA4\uFF09\u7ED3\u675F\u540E\u4ECD\u5FC5\u987B\u8C03\u7528 \`check_messages\`\uFF0C\u4EE5\u4FDD\u6301\u4FA7\u680F\u4E0E\u63D2\u4EF6\u6D88\u606F\u80FD\u88AB\u63A5\u7EED\u5904\u7406
+20. \u82E5\u914D\u7F6E\u4E86\u6709\u9650\u7B49\u5F85\u4E14 \`check_messages\` \u4EC5\u8FD4\u56DE \`[system] \u6682\u65E0\u65B0\u6D88\u606F\uFF08\u7B49\u5F85\u8D85\u65F6\uFF09\`\uFF0C**\u540C\u4E00\u8F6E\u5185\u7ACB\u5373**\u518D\u6B21\u8C03\u7528 \`check_messages\`\uFF08\u76F8\u540C \`session_tag\`\uFF09\uFF0C\u4E0D\u5F97\u5411\u7528\u6237\u8F93\u51FA\u8BE5\u5185\u90E8\u63D0\u793A\u3001\u4E0D\u5F97\u7ED3\u675F\u5BF9\u8BDD
 
 ---
 **\u56DE\u5408\u7ED3\u675F\uFF08\u5F3A\u5236\uFF09**: \u4EC5\u5F53\u56DE\u590D**\u5B8C\u6574\u8F93\u51FA\u5B8C\u6BD5\u540E**\uFF0C\u6700\u540E\u4E00\u6B65\u5FC5\u987B\u8C03\u7528 ${MCP_DISPLAY_NAME} MCP \u7684 \`check_messages\` \u5DE5\u5177\uFF08\u5FC5\u987B\u5E26\u672C\u5BF9\u8BDD\u7684 \`session_tag\`\uFF09\u3002\u82E5\u672C\u5BF9\u8BDD\u4E2D\u5C1A\u672A\u8C03\u7528\u8FC7 \`register_session\`\uFF0C\u8BF7\u5148\u8C03\u7528 \`register_session\` \u518D\u8C03\u7528 \`check_messages\`\u3002\u4E25\u7981\u5728\u56DE\u5408\u5F00\u59CB\u6216\u56DE\u590D\u5B8C\u6210\u524D\u8C03\u7528\u3002\`ask_question\` \u4EC5\u7528\u4E8E\u4EFB\u52A1\u4E2D\u9700\u8981\u7528\u6237\u505A\u9009\u62E9\u65F6\uFF08\u5982\u9009\u6846\u67B6\u3001\u9009\u65B9\u6848\uFF09\u3002
@@ -801,7 +803,7 @@ var path2 = __toESM(require("node:path"));
 var os2 = __toESM(require("node:os"));
 var https = __toESM(require("node:https"));
 var http2 = __toESM(require("node:http"));
-var API_BASE = process.env.MCP_API_BASE || "https://api.yidachuang.top/api";
+var CURSOR_SITE_ORIGIN = (process.env.CURSOR_SITE_ORIGIN || "https://cursor.com").replace(/\/$/, "");
 var INJECTED_TOKEN_FILE = "injected-token.json";
 function getCursorConfigDir() {
   switch (process.platform) {
@@ -819,16 +821,17 @@ function readVscdbViaSqlite(dbPath) {
     const db = new DatabaseSync(dbPath, { readOnly: true });
     const tokenRow = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/accessToken");
     const emailRow = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/cachedEmail");
+    const memRow = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/stripeMembershipType");
     db.close();
     if (tokenRow?.value) {
-      return { token: tokenRow.value, email: emailRow?.value || "" };
+      return { token: tokenRow.value, email: emailRow?.value || "", membershipType: memRow?.value || "" };
     }
   } catch {
   }
   try {
     const { execSync } = require("child_process");
     const escaped = dbPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const script = `const{DatabaseSync}=require("node:sqlite");const db=new DatabaseSync('${escaped}',{readOnly:true});const t=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/accessToken");const e=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/cachedEmail");db.close();console.log(JSON.stringify({t:t?.value||"",e:e?.value||""}))`;
+    const script = `const{DatabaseSync}=require("node:sqlite");const db=new DatabaseSync('${escaped}',{readOnly:true});const t=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/accessToken");const e=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/cachedEmail");const m=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/stripeMembershipType");db.close();console.log(JSON.stringify({t:t?.value||"",e:e?.value||"",m:m?.value||""}))`;
     const out = execSync(`node --disable-warning=ExperimentalWarning -e "${script}"`, {
       encoding: "utf-8",
       timeout: 1e4,
@@ -836,7 +839,7 @@ function readVscdbViaSqlite(dbPath) {
     }).trim();
     const parsed = JSON.parse(out);
     if (parsed.t)
-      return { token: parsed.t, email: parsed.e || "" };
+      return { token: parsed.t, email: parsed.e || "", membershipType: parsed.m || "" };
   } catch {
   }
   return null;
@@ -855,7 +858,11 @@ function readCursorAuth() {
       const data = JSON.parse(fs2.readFileSync(jsonPath, "utf-8"));
       const token = data["cursorAuth/accessToken"];
       if (typeof token === "string") {
-        return { token, email: data["cursorAuth/cachedEmail"] || "" };
+        return {
+          token,
+          email: data["cursorAuth/cachedEmail"] || "",
+          membershipType: data["cursorAuth/stripeMembershipType"] || ""
+        };
       }
     } catch {
     }
@@ -865,7 +872,11 @@ function readCursorAuth() {
     try {
       const data = JSON.parse(fs2.readFileSync(authPath, "utf-8"));
       if (data.token)
-        return { token: data.token, email: data.email || "" };
+        return {
+          token: data.token,
+          email: data.email || "",
+          membershipType: data.membershipType || data.stripeMembershipType || ""
+        };
     } catch {
     }
   }
@@ -882,26 +893,145 @@ function readInjectedToken() {
     return null;
   }
 }
+function readCursorSidecarEmailMembership() {
+  const gsDir = path2.join(getCursorConfigDir(), "User", "globalStorage");
+  const dbPath = path2.join(gsDir, "state.vscdb");
+  if (fs2.existsSync(dbPath)) {
+    try {
+      const { DatabaseSync } = require("node:sqlite");
+      const db = new DatabaseSync(dbPath, { readOnly: true });
+      const e = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/cachedEmail");
+      const m = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/stripeMembershipType");
+      db.close();
+      return { email: e?.value || "", membershipType: m?.value || "" };
+    } catch {
+    }
+  }
+  const jsonPath = path2.join(gsDir, "storage.json");
+  if (fs2.existsSync(jsonPath)) {
+    try {
+      const data = JSON.parse(fs2.readFileSync(jsonPath, "utf-8"));
+      return {
+        email: data["cursorAuth/cachedEmail"] || "",
+        membershipType: data["cursorAuth/stripeMembershipType"] || ""
+      };
+    } catch {
+    }
+  }
+  return { email: "", membershipType: "" };
+}
 function getEffectiveAuth() {
   const injected = readInjectedToken();
-  if (injected)
-    return { token: injected.token, email: "" };
+  if (injected) {
+    const s = readCursorSidecarEmailMembership();
+    return { token: injected.token, email: s.email, membershipType: s.membershipType };
+  }
   return readCursorAuth();
 }
-function apiRequest(endpoint, body) {
+function sessionUserIdFromToken(token) {
+  const sep = token.includes("%3A%3A") ? "%3A%3A" : token.includes("::") ? "::" : null;
+  const raw = sep ? token.split(sep)[0] : token;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+function buildAutoComposerQuota(usage) {
+  if (!usage || typeof usage !== "object")
+    return null;
+  const skip = /* @__PURE__ */ new Set(["startOfMonth"]);
+  const lower = (s) => s.toLowerCase();
+  const isApiLike = (n) => {
+    const x = lower(n);
+    return x.includes("32k") || x.includes("usage-based") || x === "api" || x.endsWith("-api");
+  };
+  const isComposerFamily = (n) => {
+    const x = lower(n);
+    if (isApiLike(n))
+      return false;
+    if (x === "default")
+      return true;
+    if (x.includes("composer"))
+      return true;
+    if (x === "auto" || x === "autocomposer" || x === "auto-composer")
+      return true;
+    return x.includes("auto") && !x.includes("api");
+  };
+  const rows = [];
+  for (const [name, v] of Object.entries(usage)) {
+    if (skip.has(name) || !v || typeof v !== "object")
+      continue;
+    if (typeof v.numRequests !== "number")
+      continue;
+    const lim = v.maxRequestUsage;
+    const limit = typeof lim === "number" && lim > 0 ? lim : null;
+    rows.push({ name, used: v.numRequests, limit });
+  }
+  if (rows.length === 0)
+    return null;
+  const composerRows = rows.filter((r) => isComposerFamily(r.name));
+  const otherRows = rows.filter((r) => !isComposerFamily(r.name) && !isApiLike(r.name));
+  const composerUsed = composerRows.reduce((a, r) => a + r.used, 0);
+  const otherUsed = otherRows.reduce((a, r) => a + r.used, 0);
+  let limitSum = 0;
+  let hasLimit = false;
+  for (const r of composerRows) {
+    if (r.limit != null) {
+      hasLimit = true;
+      limitSum += r.limit;
+    }
+  }
+  const remaining = hasLimit ? Math.max(0, limitSum - composerUsed) : null;
+  const parts = [];
+  if (composerUsed > 0)
+    parts.push(`Composer\u7CFB ${composerUsed} \u6B21`);
+  if (otherUsed > 0)
+    parts.push(`\u5176\u4F59\u6A21\u578B ${otherUsed} \u6B21`);
+  if (parts.length === 0) {
+    const fb = rows.slice().sort((a, b) => b.used - a.used)[0];
+    return {
+      bucketKey: fb.name,
+      used: fb.used,
+      limit: fb.limit,
+      remaining: fb.limit != null ? Math.max(0, fb.limit - fb.used) : null,
+      detailText: null,
+      aggregated: false
+    };
+  }
+  const detailText = parts.join(" \u00B7 ") + `\uFF08\u5B98\u7F51\u201CAuto + Composer\u201D\u4E3A\u52A0\u6743\u5408\u5E76\uFF0C\u6B64\u5904\u6309\u6A21\u578B\u5206\u9879\u7EDF\u8BA1\uFF1B\u63A5\u53E3\u65E0\u5355\u72EC\u201Cauto\u201D\u5B57\u6BB5\uFF09`;
+  return {
+    bucketKey: "mixed",
+    used: composerUsed,
+    otherUsed,
+    limit: hasLimit ? limitSum : null,
+    remaining,
+    detailText,
+    aggregated: true
+  };
+}
+function cursorSessionRequest(method, pathnameWithQuery, bodyObj, token) {
   return new Promise((resolve, reject) => {
-    const url = new URL(API_BASE + endpoint);
+    const url = new URL(CURSOR_SITE_ORIGIN + pathnameWithQuery);
     const isHttps = url.protocol === "https:";
-    const postData = JSON.stringify(body);
+    const postData = bodyObj != null ? JSON.stringify(bodyObj) : "";
+    const headers = {
+      Accept: "application/json",
+      Cookie: `WorkosCursorSessionToken=${token}`,
+      Origin: CURSOR_SITE_ORIGIN,
+      Referer: CURSOR_SITE_ORIGIN + "/dashboard",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    };
+    if (method !== "GET" && method !== "HEAD" && postData.length > 0) {
+      headers["Content-Type"] = "application/json";
+      headers["Content-Length"] = Buffer.byteLength(postData);
+    }
     const options = {
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
       path: url.pathname + url.search,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(postData)
-      }
+      method,
+      headers
     };
     const mod = isHttps ? https : http2;
     const req = mod.request(options, (res) => {
@@ -910,11 +1040,12 @@ function apiRequest(endpoint, body) {
         data += chunk.toString();
       });
       res.on("end", () => {
+        let body = null;
         try {
-          resolve(JSON.parse(data));
+          body = data ? JSON.parse(data) : null;
         } catch {
-          resolve({ error: data });
         }
+        resolve({ status: res.statusCode || 0, body, raw: data });
       });
     });
     req.on("error", reject);
@@ -922,31 +1053,85 @@ function apiRequest(endpoint, body) {
       req.destroy();
       reject(new Error("\u8BF7\u6C42\u8D85\u65F6"));
     });
-    req.write(postData);
+    if (postData.length > 0)
+      req.write(postData);
     req.end();
   });
 }
 async function fetchCursorUsage() {
   const auth = getEffectiveAuth();
-  if (!auth) {
+  if (!auth?.token) {
     return { success: false, error: "\u672A\u68C0\u6D4B\u5230 Cursor \u767B\u5F55\u4FE1\u606F" };
   }
   try {
-    const resp = await apiRequest("/subscriptions/local-token-info", { token: auth.token });
-    if (!resp || !resp.success) {
-      return { success: false, error: resp?.error || "Token \u5DF2\u5931\u6548\uFF0C\u8BF7\u91CD\u65B0\u767B\u5F55 Cursor" };
+    const uid = sessionUserIdFromToken(auth.token);
+    const usageRes = await cursorSessionRequest(
+      "GET",
+      "/api/usage?user=" + encodeURIComponent(uid),
+      null,
+      auth.token
+    );
+    if (usageRes.status !== 200 || !usageRes.body || typeof usageRes.body !== "object") {
+      const hint = typeof usageRes.raw === "string" && usageRes.raw.length < 400 ? usageRes.raw : `HTTP ${usageRes.status}`;
+      return {
+        success: false,
+        error: `cursor.com \u989D\u5EA6\u63A5\u53E3\u5931\u8D25\uFF08${hint}\uFF09\u3002\u8BF7\u786E\u8BA4\u5DF2\u5728 Cursor \u767B\u5F55\u3002`
+      };
     }
-    const d = resp.data;
+    const usage = usageRes.body;
+    const models = [];
+    let eventsCount = 0;
+    for (const [name, v] of Object.entries(usage)) {
+      if (name === "startOfMonth" || !v || typeof v !== "object")
+        continue;
+      if (typeof v.numRequests !== "number")
+        continue;
+      eventsCount += v.numRequests;
+      models.push({ name, count: v.numRequests, cost: 0 });
+    }
+    models.sort((a, b) => b.count - a.count);
+    const g4 = usage["gpt-4"];
+    let usagePct = null;
+    if (g4 && typeof g4.maxRequestUsage === "number" && g4.maxRequestUsage > 0) {
+      usagePct = Math.min(100, Math.round(g4.numRequests / g4.maxRequestUsage * 1e4) / 100);
+    } else {
+      let best = 0;
+      for (const m of models) {
+        const u = usage[m.name];
+        if (u && typeof u.maxRequestUsage === "number" && u.maxRequestUsage > 0) {
+          const p = u.numRequests / u.maxRequestUsage;
+          if (p > best)
+            best = p;
+        }
+      }
+      if (best > 0)
+        usagePct = Math.min(100, Math.round(best * 1e4) / 100);
+    }
+    let billingCycleStart = "";
+    let billingCycleEnd = "";
+    const som = usage.startOfMonth;
+    if (som != null && som !== "") {
+      const d = new Date(som);
+      if (!isNaN(d.getTime())) {
+        billingCycleStart = d.toISOString();
+        const e = new Date(d.getTime());
+        e.setMonth(e.getMonth() + 1);
+        e.setMilliseconds(e.getMilliseconds() - 1);
+        billingCycleEnd = e.toISOString();
+      }
+    }
+    const autoQuota = buildAutoComposerQuota(usage);
     return {
       success: true,
-      email: d?.email ?? auth.email,
-      membershipType: d?.membershipType ?? "-",
-      usagePct: d?.usagePct ?? null,
-      billingCycleStart: d?.billingStart ?? "",
-      billingCycleEnd: d?.billingEnd ?? "",
-      totalCost: d?.totalCost ?? 0,
-      eventsCount: d?.eventsCount ?? 0,
-      models: d?.models ?? []
+      email: auth.email || "-",
+      membershipType: auth.membershipType || "-",
+      usagePct,
+      billingCycleStart,
+      billingCycleEnd,
+      totalCost: 0,
+      eventsCount,
+      models,
+      autoQuota
     };
   } catch (e) {
     return {
@@ -1254,6 +1439,9 @@ var MessengerViewProvider = class {
         case "pickImageStage":
           void this.handlePickImageStage();
           break;
+        case "pickAttachment":
+          void this.handlePickAttachment();
+          break;
         case "sendComposed":
           this.handleSendComposed(msg);
           break;
@@ -1368,6 +1556,38 @@ var MessengerViewProvider = class {
       mainPanel.webview.postMessage({ type: "stagedImagePick", dataUrl });
     } catch {
     }
+  }
+  async handlePickAttachment() {
+    if (!mainPanel)
+      return;
+    const uris = await vscode.window.showOpenDialog({ canSelectMany: false });
+    if (!uris?.[0])
+      return;
+    const fsPath = uris[0].fsPath;
+    const ext = path3.extname(fsPath).toLowerCase().replace(/^\./, "") || "";
+    const imageExts = /* @__PURE__ */ new Set(["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"]);
+    if (imageExts.has(ext)) {
+      try {
+        const buf = fs3.readFileSync(fsPath);
+        const mimeMap = {
+          png: "image/png",
+          jpg: "image/jpeg",
+          jpeg: "image/jpeg",
+          gif: "image/gif",
+          webp: "image/webp",
+          bmp: "image/bmp",
+          svg: "image/svg+xml"
+        };
+        const mime = mimeMap[ext] || "image/png";
+        const dataUrl = `data:${mime};base64,${buf.toString("base64")}`;
+        mainPanel.webview.postMessage({ type: "stagedImagePick", dataUrl });
+      } catch {
+      }
+      return;
+    }
+    const copied = await copyToUploads(fsPath);
+    if (copied)
+      sendFile(copied, void 0, getCurrentSessionId());
   }
   handleSendComposed(msg) {
     const text = typeof msg.text === "string" ? msg.text : "";
