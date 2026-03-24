@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Language="en-US" Id="heycursor" Version="1.0.0" Publisher="local" />
+    <Identity Language="en-US" Id="heycursor" Version="1.1.1" Publisher="local" />
     <DisplayName>HeyCursor</DisplayName>
     <Description xml:space="preserve">底部面板 Messenger，可与 Cursor Messenger（侧栏）同时安装。</Description>
     <Tags></Tags>

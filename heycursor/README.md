@@ -65,5 +65,5 @@ cd C:\Code\cursormessage\heycursor
 $zip = "_pack-heycursor.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -LiteralPath @(".\extension", ".\extension.vsixmanifest") -DestinationPath $zip -Force
-Move-Item $zip ..\heycursor-1.0.0.vsix -Force
+Move-Item $zip ..\heycursor-1.1.1.vsix -Force
 ```
