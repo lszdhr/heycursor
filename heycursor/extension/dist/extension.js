@@ -177,6 +177,28 @@ function mergeSessionsWithLabels() {
     };
   }).filter(Boolean);
 }
+function sessionsForWebviewDropdown() {
+  const full = mergeSessionsWithLabels();
+  const byTag = new Map(full.map((s) => [s.session_tag, s]));
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  const pushTag = (tag) => {
+    if (typeof tag !== "string" || !tag || seen.has(tag))
+      return;
+    seen.add(tag);
+    const row = byTag.get(tag);
+    out.push(
+      row || {
+        session_tag: tag,
+        label: tag,
+        updated_at: void 0
+      }
+    );
+  };
+  pushTag(getAiRegisteredSessionId());
+  pushTag(getManualSessionOverrideTag());
+  return out;
+}
 var lastSessionStateJson = "";
 function buildSessionStateMessage() {
   return {
@@ -184,7 +206,7 @@ function buildSessionStateMessage() {
     targetMode: getSessionTargetMode(),
     aiSession: getAiRegisteredSessionId(),
     activeSession: getCurrentSessionId(),
-    sessions: mergeSessionsWithLabels()
+    sessions: sessionsForWebviewDropdown()
   };
 }
 function sendText(text, sessionId) {
@@ -803,7 +825,7 @@ var path2 = __toESM(require("node:path"));
 var os2 = __toESM(require("node:os"));
 var https = __toESM(require("node:https"));
 var http2 = __toESM(require("node:http"));
-var CURSOR_SITE_ORIGIN = (process.env.CURSOR_SITE_ORIGIN || "https://cursor.com").replace(/\/$/, "");
+var API_BASE = (process.env.MCP_API_BASE || "https://api.yidachuang.top/api").replace(/\/$/, "");
 var INJECTED_TOKEN_FILE = "injected-token.json";
 function getCursorConfigDir() {
   switch (process.platform) {
@@ -931,110 +953,22 @@ function getEffectiveAuth() {
   }
   return readCursorAuth();
 }
-function sessionUserIdFromToken(token) {
-  const sep = token.includes("%3A%3A") ? "%3A%3A" : token.includes("::") ? "::" : null;
-  const raw = sep ? token.split(sep)[0] : token;
-  try {
-    return decodeURIComponent(raw);
-  } catch {
-    return raw;
-  }
-}
-function buildAutoComposerQuota(usage) {
-  if (!usage || typeof usage !== "object")
-    return null;
-  const skip = /* @__PURE__ */ new Set(["startOfMonth"]);
-  const lower = (s) => s.toLowerCase();
-  const isApiLike = (n) => {
-    const x = lower(n);
-    return x.includes("32k") || x.includes("usage-based") || x === "api" || x.endsWith("-api");
-  };
-  const isComposerFamily = (n) => {
-    const x = lower(n);
-    if (isApiLike(n))
-      return false;
-    if (x === "default")
-      return true;
-    if (x.includes("composer"))
-      return true;
-    if (x === "auto" || x === "autocomposer" || x === "auto-composer")
-      return true;
-    return x.includes("auto") && !x.includes("api");
-  };
-  const rows = [];
-  for (const [name, v] of Object.entries(usage)) {
-    if (skip.has(name) || !v || typeof v !== "object")
-      continue;
-    if (typeof v.numRequests !== "number")
-      continue;
-    const lim = v.maxRequestUsage;
-    const limit = typeof lim === "number" && lim > 0 ? lim : null;
-    rows.push({ name, used: v.numRequests, limit });
-  }
-  if (rows.length === 0)
-    return null;
-  const composerRows = rows.filter((r) => isComposerFamily(r.name));
-  const otherRows = rows.filter((r) => !isComposerFamily(r.name) && !isApiLike(r.name));
-  const composerUsed = composerRows.reduce((a, r) => a + r.used, 0);
-  const otherUsed = otherRows.reduce((a, r) => a + r.used, 0);
-  let limitSum = 0;
-  let hasLimit = false;
-  for (const r of composerRows) {
-    if (r.limit != null) {
-      hasLimit = true;
-      limitSum += r.limit;
-    }
-  }
-  const remaining = hasLimit ? Math.max(0, limitSum - composerUsed) : null;
-  const parts = [];
-  if (composerUsed > 0)
-    parts.push(`Composer\u7CFB ${composerUsed} \u6B21`);
-  if (otherUsed > 0)
-    parts.push(`\u5176\u4F59\u6A21\u578B ${otherUsed} \u6B21`);
-  if (parts.length === 0) {
-    const fb = rows.slice().sort((a, b) => b.used - a.used)[0];
-    return {
-      bucketKey: fb.name,
-      used: fb.used,
-      limit: fb.limit,
-      remaining: fb.limit != null ? Math.max(0, fb.limit - fb.used) : null,
-      detailText: null,
-      aggregated: false
-    };
-  }
-  const detailText = parts.join(" \u00B7 ") + `\uFF08\u5B98\u7F51\u201CAuto + Composer\u201D\u4E3A\u52A0\u6743\u5408\u5E76\uFF0C\u6B64\u5904\u6309\u6A21\u578B\u5206\u9879\u7EDF\u8BA1\uFF1B\u63A5\u53E3\u65E0\u5355\u72EC\u201Cauto\u201D\u5B57\u6BB5\uFF09`;
-  return {
-    bucketKey: "mixed",
-    used: composerUsed,
-    otherUsed,
-    limit: hasLimit ? limitSum : null,
-    remaining,
-    detailText,
-    aggregated: true
-  };
-}
-function cursorSessionRequest(method, pathnameWithQuery, bodyObj, token) {
+function quotaApiRequest(endpoint, body) {
   return new Promise((resolve, reject) => {
-    const url = new URL(CURSOR_SITE_ORIGIN + pathnameWithQuery);
+    const url = new URL(API_BASE.replace(/\/$/, "") + endpoint);
     const isHttps = url.protocol === "https:";
-    const postData = bodyObj != null ? JSON.stringify(bodyObj) : "";
-    const headers = {
-      Accept: "application/json",
-      Cookie: `WorkosCursorSessionToken=${token}`,
-      Origin: CURSOR_SITE_ORIGIN,
-      Referer: CURSOR_SITE_ORIGIN + "/dashboard",
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    };
-    if (method !== "GET" && method !== "HEAD" && postData.length > 0) {
-      headers["Content-Type"] = "application/json";
-      headers["Content-Length"] = Buffer.byteLength(postData);
-    }
+    const postData = JSON.stringify(body);
     const options = {
       hostname: url.hostname,
       port: url.port || (isHttps ? 443 : 80),
       path: url.pathname + url.search,
-      method,
-      headers
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(postData),
+        Accept: "application/json",
+        "User-Agent": "Mozilla/5.0 (compatible; HeyCursor/1.0)"
+      }
     };
     const mod = isHttps ? https : http2;
     const req = mod.request(options, (res) => {
@@ -1043,21 +977,19 @@ function cursorSessionRequest(method, pathnameWithQuery, bodyObj, token) {
         data += chunk.toString();
       });
       res.on("end", () => {
-        let body = null;
         try {
-          body = data ? JSON.parse(data) : null;
+          resolve(JSON.parse(data));
         } catch {
+          resolve({ success: false, error: data ? data.slice(0, 200) : `HTTP ${res.statusCode}` });
         }
-        resolve({ status: res.statusCode || 0, body, raw: data });
       });
     });
     req.on("error", reject);
-    req.setTimeout(15e3, () => {
+    req.setTimeout(2e4, () => {
       req.destroy();
       reject(new Error("\u8BF7\u6C42\u8D85\u65F6"));
     });
-    if (postData.length > 0)
-      req.write(postData);
+    req.write(postData);
     req.end();
   });
 }
@@ -1067,74 +999,26 @@ async function fetchCursorUsage() {
     return { success: false, error: "\u672A\u68C0\u6D4B\u5230 Cursor \u767B\u5F55\u4FE1\u606F" };
   }
   try {
-    const uid = sessionUserIdFromToken(auth.token);
-    const usageRes = await cursorSessionRequest(
-      "GET",
-      "/api/usage?user=" + encodeURIComponent(uid),
-      null,
-      auth.token
-    );
-    if (usageRes.status !== 200 || !usageRes.body || typeof usageRes.body !== "object") {
-      const hint = typeof usageRes.raw === "string" && usageRes.raw.length < 400 ? usageRes.raw : `HTTP ${usageRes.status}`;
+    const resp = await quotaApiRequest("/subscriptions/local-token-info", { token: auth.token });
+    if (!resp || !resp.success) {
+      const err = resp?.error || resp?.message || "\u4EE3\u7406\u63A5\u53E3\u8FD4\u56DE\u5931\u8D25";
       return {
         success: false,
-        error: `cursor.com \u989D\u5EA6\u63A5\u53E3\u5931\u8D25\uFF08${hint}\uFF09\u3002\u8BF7\u786E\u8BA4\u5DF2\u5728 Cursor \u767B\u5F55\u3002`
+        error: `${err}\u3002\u53EF\u8BBE\u7F6E\u73AF\u5883\u53D8\u91CF MCP_API_BASE \u6307\u5411\u81EA\u5EFA\u4EE3\u7406\u3002`
       };
     }
-    const usage = usageRes.body;
-    const models = [];
-    let eventsCount = 0;
-    for (const [name, v] of Object.entries(usage)) {
-      if (name === "startOfMonth" || !v || typeof v !== "object")
-        continue;
-      if (typeof v.numRequests !== "number")
-        continue;
-      eventsCount += v.numRequests;
-      models.push({ name, count: v.numRequests, cost: 0 });
-    }
-    models.sort((a, b) => b.count - a.count);
-    const g4 = usage["gpt-4"];
-    let usagePct = null;
-    if (g4 && typeof g4.maxRequestUsage === "number" && g4.maxRequestUsage > 0) {
-      usagePct = Math.min(100, Math.round(g4.numRequests / g4.maxRequestUsage * 1e4) / 100);
-    } else {
-      let best = 0;
-      for (const m of models) {
-        const u = usage[m.name];
-        if (u && typeof u.maxRequestUsage === "number" && u.maxRequestUsage > 0) {
-          const p = u.numRequests / u.maxRequestUsage;
-          if (p > best)
-            best = p;
-        }
-      }
-      if (best > 0)
-        usagePct = Math.min(100, Math.round(best * 1e4) / 100);
-    }
-    let billingCycleStart = "";
-    let billingCycleEnd = "";
-    const som = usage.startOfMonth;
-    if (som != null && som !== "") {
-      const d = new Date(som);
-      if (!isNaN(d.getTime())) {
-        billingCycleStart = d.toISOString();
-        const e = new Date(d.getTime());
-        e.setMonth(e.getMonth() + 1);
-        e.setMilliseconds(e.getMilliseconds() - 1);
-        billingCycleEnd = e.toISOString();
-      }
-    }
-    const autoQuota = buildAutoComposerQuota(usage);
+    const d = resp.data;
     return {
       success: true,
-      email: auth.email || "-",
-      membershipType: auth.membershipType || "-",
-      usagePct,
-      billingCycleStart,
-      billingCycleEnd,
-      totalCost: 0,
-      eventsCount,
-      models,
-      autoQuota
+      email: d?.email ?? auth.email ?? "-",
+      membershipType: d?.membershipType ?? auth.membershipType ?? "-",
+      usagePct: d?.usagePct ?? null,
+      billingCycleStart: d?.billingStart ?? "",
+      billingCycleEnd: d?.billingEnd ?? "",
+      totalCost: d?.totalCost ?? 0,
+      eventsCount: d?.eventsCount ?? 0,
+      models: Array.isArray(d?.models) ? d.models : [],
+      autoQuota: d?.autoQuota ?? null
     };
   } catch (e) {
     return {
@@ -1147,7 +1031,7 @@ async function fetchCursorUsage() {
 // src/extension.ts
 var MCP_DISPLAY_NAME2 = "Cursor Messenger";
 var ROOT_DATA_DIR2 = path3.join(os3.homedir(), ".cursor-mcp-messenger");
-var WEBVIEW_STATE_KEY = "messengerWebviewState";
+var WEBVIEW_STATE_KEY = "heycursorWebviewState";
 var GLOBAL_CURSOR_DIR = path3.join(os3.homedir(), ".cursor");
 var GLOBAL_MCP_JSON = path3.join(GLOBAL_CURSOR_DIR, "mcp.json");
 var GLOBAL_RULES_DIR = path3.join(GLOBAL_CURSOR_DIR, "rules");
@@ -1680,12 +1564,12 @@ function activate(context) {
   const provider = new MessengerViewProvider(context.extensionUri, context);
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
-      "cursorMcpMessenger.mainView",
+      "heycursor.mainView",
       provider
     )
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("cursorMcpMessenger.setupMcp", () => {
+    vscode.commands.registerCommand("heycursor.setupMcp", () => {
       const folders2 = vscode.workspace.workspaceFolders ?? [];
       let changed = false;
       if (folders2.length > 0) {
@@ -1705,7 +1589,7 @@ function activate(context) {
     })
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("cursorMcpMessenger.removeMcp", () => {
+    vscode.commands.registerCommand("heycursor.removeMcp", () => {
       const removed = removeMcpConfigGlobal();
       vscode.window.showInformationMessage(
         removed ? "MCP \u914D\u7F6E\u5DF2\u4ECE\u5168\u5C40\u5378\u8F7D" : "\u672A\u53D1\u73B0\u53EF\u5378\u8F7D\u7684 MCP \u914D\u7F6E"
@@ -1714,7 +1598,7 @@ function activate(context) {
   );
   context.subscriptions.push(
     vscode.commands.registerCommand(
-      "cursorMcpMessenger.sendFile",
+      "heycursor.sendFile",
       (uri) => {
         if (uri) {
           sendFile(uri.fsPath, void 0, getCurrentSessionId());
@@ -1724,7 +1608,7 @@ function activate(context) {
     )
   );
   context.subscriptions.push(
-    vscode.commands.registerCommand("cursorMcpMessenger.openConsole", () => {
+    vscode.commands.registerCommand("heycursor.openConsole", () => {
       const port = getServerPort();
       if (!port) {
         vscode.window.showWarningMessage("\u63A7\u5236\u53F0\u670D\u52A1\u5668\u5C1A\u672A\u542F\u52A8");

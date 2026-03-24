@@ -1,5 +1,6 @@
 ---
-description: 
+description: "自动调用 Messenger MCP 检查待发送消息"
+globs: "**/*"
 alwaysApply: true
 ---
 

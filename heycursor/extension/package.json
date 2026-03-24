@@ -1,0 +1,43 @@
+{
+  "name": "heycursor",
+  "displayName": "HeyCursor",
+  "description": "底部面板版 Messenger，与侧栏「Cursor Messenger」可并存。扩展 ID 为 heycursor，与 cursor-mcp-messenger 不同；共用同一 MCP（Cursor Messenger）与数据目录。",
+  "version": "1.0.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "heycursor",
+          "title": "HeyCursor",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "heycursor": [
+        {
+          "type": "webview",
+          "id": "heycursor.mainView",
+          "name": "HeyCursor"
+        }
+      ]
+    },
+    "commands": [
+      { "command": "heycursor.setupMcp", "title": "HeyCursor: 安装 MCP 配置" },
+      { "command": "heycursor.removeMcp", "title": "HeyCursor: 卸载 MCP 配置" },
+      { "command": "heycursor.sendFile", "title": "HeyCursor: 发送文件到输入框" },
+      { "command": "heycursor.openConsole", "title": "HeyCursor: 打开远程控制台" }
+    ],
+    "menus": {
+      "explorer/context": [
+        { "command": "heycursor.sendFile", "group": "navigation@101" }
+      ]
+    }
+  }
+}

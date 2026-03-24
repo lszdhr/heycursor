@@ -1,2 +1,11 @@
 Thumbs.db
 .DS_Store
+
+# Local clones / scratch (not part of repo deliverables)
+_cockpit-tools/
+_vsix_110/
+_windsurf_am/
+_m110.zip
+_peek.js
+_tabctx*.js
+_tabout.txt

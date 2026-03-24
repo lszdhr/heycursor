@@ -1,12 +1,20 @@
 /**
  * 快速检查 dist/webview.js 是否包含预期片段（避免在终端里跑超长 node -e 被误判超时/Cancel）。
+ * 默认校验主力路径：heycursor/extension/dist/webview.js
  * 用法：在仓库根目录执行  node vsix_extracted/tools/verify-webview.cjs
- * 或在 extension 目录：node ../tools/verify-webview.cjs
+ * 环境变量 MESSENGER_WEBVIEW_JS 可指定其它 webview.js 绝对/相对路径。
  */
 "use strict";
 const fs = require("fs");
 const path = require("path");
-const webviewPath = path.join(__dirname, "..", "extension", "dist", "webview.js");
+const repoRoot = path.join(__dirname, "..", "..");
+const primary = path.join(repoRoot, "heycursor", "extension", "dist", "webview.js");
+const legacy = path.join(__dirname, "..", "extension", "dist", "webview.js");
+const webviewPath = process.env.MESSENGER_WEBVIEW_JS
+  ? path.resolve(process.cwd(), process.env.MESSENGER_WEBVIEW_JS)
+  : fs.existsSync(primary)
+    ? primary
+    : legacy;
 if (!fs.existsSync(webviewPath)) {
   console.error("missing:", webviewPath);
   process.exit(2);

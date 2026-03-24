@@ -5,7 +5,7 @@ trigger: always
 
 # Cursor Messenger 扩展仓库：验证与终端约定
 
-本规则适用于维护 `vsix_extracted/extension/dist/`（如 `webview.js`、`extension.js`）及打包 VSIX 时的自检。
+**主力扩展为 HeyCursor**：日常维护以 `heycursor/extension/dist/`（`webview.js`、`webview.css`、`extension.js` 等）为准。侧栏版 `vsix_extracted/extension/dist/` 仅在需要单独打侧栏 VSIX 时同步。
 
 ## 不要用超长 `node -e`
 
@@ -14,11 +14,10 @@ trigger: always
 
 ## 推荐做法（按优先顺序）
 
-1. **用编辑器/Agent 的搜索能力**：对 `vsix_extracted/extension/dist/webview.js` 等文件使用 **grep / 全文搜索** 查找关键字（如 `autoQuota`、`z.autoQuota.detailText`、`Auto + Composer（分项）`），比跑巨型 `node -e` 更稳。
+1. **用编辑器/Agent 的搜索能力**：对 `heycursor/extension/dist/webview.js` 等文件使用 **grep / 全文搜索** 查找关键字（如 `autoQuota`、`z.autoQuota.detailText`、`Auto + Composer（分项）`），比跑巨型 `node -e` 更稳。
 2. **用仓库内脚本**：在项目根执行  
    `node vsix_extracted/tools/verify-webview.cjs`  
-   或在 `vsix_extracted/extension` 下执行  
-   `npm run verify:webview`  
+   （默认检查 `heycursor/extension/dist/webview.js`；可用环境变量 `MESSENGER_WEBVIEW_JS` 指定其它文件。）  
    脚本会逐条打印 `OK` / `NO` 并以**退出码 0/1** 表示是否全部命中。
 3. **终端快速搜**：PowerShell `Select-String`，或 `rg` / `findstr` 对路径搜索子串，避免整文件读进 `console.log`。
 
