@@ -1336,7 +1336,7 @@ function getMcpServerPath() {
   const extDir = path3.dirname(path3.dirname(__filename));
   return path3.join(extDir, "dist", "mcp-server.mjs");
 }
-var DEFAULT_HEYCURSOR_KEEPALIVE_MS = 1200000;
+var DEFAULT_HEYCURSOR_KEEPALIVE_MS = 900000;
 function buildMessengerMcpEnv(dataDir, prevEnv) {
   const env = typeof prevEnv === "object" && prevEnv !== null ? { ...prevEnv } : {};
   env.MESSENGER_DATA_DIR = dataDir;
