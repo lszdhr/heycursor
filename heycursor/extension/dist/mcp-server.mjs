@@ -21256,6 +21256,35 @@ server.tool(
   async ({ reply, session_tag }, extra) => {
     await ensureDataDir();
     await appendServerLog("info", "check_messages started" + (session_tag ? ` session_tag=${session_tag}` : ""));
+    if (session_tag) {
+      try {
+        await fs.writeFile(
+          CURRENT_SESSION_FILE,
+          JSON.stringify({ session_tag }, null, 2),
+          "utf-8"
+        );
+        let list = [];
+        try {
+          const raw2 = await fs.readFile(KNOWN_SESSIONS_FILE, "utf-8");
+          const data2 = JSON.parse(raw2);
+          list = Array.isArray(data2) ? data2 : [];
+        } catch {
+        }
+        const now2 = (/* @__PURE__ */ new Date()).toISOString();
+        const idx2 = list.findIndex((x) => x && x.session_tag === session_tag);
+        if (idx2 >= 0) {
+          list[idx2] = {
+            session_tag,
+            label: list[idx2].label || session_tag,
+            updated_at: now2
+          };
+        } else {
+          list.push({ session_tag, label: session_tag, updated_at: now2 });
+        }
+        await fs.writeFile(KNOWN_SESSIONS_FILE, JSON.stringify(list, null, 2), "utf-8");
+      } catch {
+      }
+    }
     if (reply) {
       await fs.writeFile(
         REPLY_FILE,

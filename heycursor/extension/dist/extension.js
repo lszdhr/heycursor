@@ -163,6 +163,42 @@ function readSessionLabels() {
     return {};
   }
 }
+function writeSessionLabels(labels) {
+  ensureDir();
+  fs.writeFileSync(path.join(getDataDir(), "session_labels.json"), JSON.stringify(labels, null, 2), "utf-8");
+}
+function summarizeSessionLabelText(text) {
+  if (typeof text !== "string")
+    return "";
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  if (!oneLine)
+    return "";
+  const clipped = oneLine.slice(0, 28).trim();
+  return clipped.length < oneLine.length ? `${clipped}...` : clipped;
+}
+function autoLabelFromFilePath(filePath) {
+  if (typeof filePath !== "string" || !filePath)
+    return "";
+  const base = path3.basename(filePath).replace(/\.[^.]+$/, "");
+  return summarizeSessionLabelText(base);
+}
+function maybeAutoLabelSession(sessionId, labelText) {
+  if (typeof sessionId !== "string" || !sessionId)
+    return;
+  const nextLabel = summarizeSessionLabelText(labelText);
+  if (!nextLabel)
+    return;
+  const labels = readSessionLabels();
+  const existing = typeof labels[sessionId] === "string" ? labels[sessionId].trim() : "";
+  if (existing)
+    return;
+  const known = readKnownSessionsList().find((item) => item && item.session_tag === sessionId);
+  const knownLabel = typeof known?.label === "string" ? known.label.trim() : "";
+  if (knownLabel && knownLabel !== sessionId)
+    return;
+  labels[sessionId] = nextLabel;
+  writeSessionLabels(labels);
+}
 function mergeSessionsWithLabels() {
   const list = readKnownSessionsList();
   const labels = readSessionLabels();
@@ -197,6 +233,14 @@ function sessionsForWebviewDropdown() {
   };
   pushTag(getAiRegisteredSessionId());
   pushTag(getManualSessionOverrideTag());
+  const recent = [...full].sort((a, b) => {
+    const ta = typeof a?.updated_at === "string" ? Date.parse(a.updated_at) : 0;
+    const tb = typeof b?.updated_at === "string" ? Date.parse(b.updated_at) : 0;
+    return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
+  });
+  for (const row of recent.slice(0, 3)) {
+    pushTag(row?.session_tag);
+  }
   return out;
 }
 var lastSessionStateJson = "";
@@ -221,6 +265,7 @@ function sendText(text, sessionId) {
     item.session_id = sessionId;
   queue.push(item);
   writeQueue(queue);
+  maybeAutoLabelSession(sessionId, text);
 }
 function sendImage(filePath, caption, sessionId) {
   const queue = readQueue();
@@ -235,6 +280,7 @@ function sendImage(filePath, caption, sessionId) {
     item.session_id = sessionId;
   queue.push(item);
   writeQueue(queue);
+  maybeAutoLabelSession(sessionId, caption || autoLabelFromFilePath(filePath) || "图片消息");
 }
 function queueImageFromDataUrl(dataUrl, caption, sessionId) {
   try {
@@ -266,6 +312,7 @@ function sendFile(filePath, suffix, sessionId) {
     item.session_id = sessionId;
   queue.push(item);
   writeQueue(queue);
+  maybeAutoLabelSession(sessionId, autoLabelFromFilePath(filePath) || suffix || "文件消息");
 }
 function getQueueCount(sessionId) {
   return readQueue(sessionId).length;
@@ -824,9 +871,11 @@ var fs2 = __toESM(require("node:fs"));
 var path2 = __toESM(require("node:path"));
 var os2 = __toESM(require("node:os"));
 var https = __toESM(require("node:https"));
-var http2 = __toESM(require("node:http"));
-var API_BASE = (process.env.MCP_API_BASE || "https://api.yidachuang.top/api").replace(/\/$/, "");
 var INJECTED_TOKEN_FILE = "injected-token.json";
+var CURSOR_USAGE_SUMMARY_URL = "https://cursor.com/api/usage-summary";
+var CURSOR_GET_USER_META_URL = "https://api2.cursor.sh/aiserver.v1.AuthService/GetUserMeta";
+var CURSOR_FULL_STRIPE_PROFILE_URL = "https://api2.cursor.sh/auth/full_stripe_profile";
+var CURSOR_STRIPE_PROFILE_URL = "https://api2.cursor.sh/auth/stripe_profile";
 function getCursorConfigDir() {
   switch (process.platform) {
     case "win32":
@@ -953,43 +1002,265 @@ function getEffectiveAuth() {
   }
   return readCursorAuth();
 }
-function quotaApiRequest(endpoint, body) {
+function extractWorkosUserIdFromJwt(jwt) {
+  try {
+    const parts = jwt.split(".");
+    if (parts.length < 2)
+      return null;
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - b64.length % 4);
+    const payload = JSON.parse(Buffer.from(b64 + pad, "base64").toString("utf8"));
+    const sub = payload?.sub;
+    if (typeof sub !== "string")
+      return null;
+    const userId = sub.includes("|") ? sub.split("|").pop() : sub;
+    return userId && userId.startsWith("user_") ? userId : null;
+  } catch {
+    return null;
+  }
+}
+function pickNumberFromObj(obj, keys) {
+  if (!obj || typeof obj !== "object")
+    return null;
+  for (const key of keys) {
+    const raw = obj[key];
+    if (raw == null)
+      continue;
+    if (typeof raw === "number" && Number.isFinite(raw))
+      return raw;
+    if (typeof raw === "string") {
+      const parsed = parseFloat(raw.trim());
+      if (Number.isFinite(parsed))
+        return parsed;
+    }
+  }
+  return null;
+}
+function pickStringFromObj(obj, keys) {
+  if (!obj || typeof obj !== "object")
+    return null;
+  for (const key of keys) {
+    const raw = obj[key];
+    if (typeof raw !== "string")
+      continue;
+    const text = raw.trim();
+    if (text)
+      return text;
+  }
+  return null;
+}
+function pickBooleanFromObj(obj, keys) {
+  if (!obj || typeof obj !== "object")
+    return null;
+  for (const key of keys) {
+    const raw = obj[key];
+    if (typeof raw === "boolean")
+      return raw;
+    if (typeof raw === "string") {
+      const text = raw.trim().toLowerCase();
+      if (text === "true")
+        return true;
+      if (text === "false")
+        return false;
+    }
+  }
+  return null;
+}
+function getUsagePlan(raw) {
+  if (!raw || typeof raw !== "object")
+    return null;
+  return raw.individualUsage?.plan || raw.individual_usage?.plan || raw.planUsage || raw.plan_usage || null;
+}
+function officialUsagePercentFromRaw(raw) {
+  const plan = getUsagePlan(raw);
+  if (!plan || typeof plan !== "object")
+    return null;
+  const totalDirect = pickNumberFromObj(plan, ["totalPercentUsed", "total_percent_used"]);
+  const used = pickNumberFromObj(plan, ["used", "totalSpend", "total_spend"]);
+  const limit = pickNumberFromObj(plan, ["limit"]);
+  let total = totalDirect;
+  if (total == null && used != null && limit != null && limit > 0)
+    total = used / limit * 100;
+  if (total == null || !Number.isFinite(total))
+    return null;
+  return Math.min(100, Math.max(0, Math.round(total)));
+}
+function extractBillingCycleValue(raw, keys) {
+  if (!raw || typeof raw !== "object")
+    return "";
+  const direct = pickStringFromObj(raw, keys);
+  if (direct)
+    return direct;
+  const plan = getUsagePlan(raw);
+  return pickStringFromObj(plan, keys) || "";
+}
+function formatUsdFromCents(value) {
+  if (value == null || !Number.isFinite(value))
+    return "$0.00";
+  return `$${(value / 100).toFixed(2)}`;
+}
+function buildAutoQuotaFromRaw(raw) {
+  const plan = getUsagePlan(raw);
+  if (!plan || typeof plan !== "object")
+    return null;
+  const autoUsedPct = pickNumberFromObj(plan, ["autoPercentUsed", "auto_percent_used"]);
+  const autoUsed = autoUsedPct == null ? null : Math.max(0, Math.min(100, autoUsedPct));
+  const apiUsedPct = pickNumberFromObj(plan, ["apiPercentUsed", "api_percent_used"]);
+  const planUsed = pickNumberFromObj(plan, ["used", "totalSpend", "total_spend"]);
+  const planLimit = pickNumberFromObj(plan, ["limit"]);
+  const onDemand = raw?.individualUsage?.onDemand || raw?.individual_usage?.onDemand || raw?.spendLimitUsage || raw?.spend_limit_usage || null;
+  const onDemandUsed = pickNumberFromObj(onDemand, ["used", "totalSpend", "total_spend", "individualUsed", "individual_used"]);
+  const onDemandLimit = pickNumberFromObj(onDemand, ["limit", "individualLimit", "individual_limit", "pooledLimit", "pooled_limit"]);
+  const onDemandEnabled = pickBooleanFromObj(onDemand, ["enabled"]);
+  const detailParts = [];
+  if (autoUsed != null)
+    detailParts.push(`Auto + Composer 已用 ${autoUsed.toFixed(1)}%`);
+  if (apiUsedPct != null)
+    detailParts.push(`API 已用 ${Math.max(0, Math.min(100, apiUsedPct)).toFixed(1)}%`);
+  if (planUsed != null && planLimit != null && planLimit > 0)
+    detailParts.push(`Plan ${formatUsdFromCents(planUsed)} / ${formatUsdFromCents(planLimit)}`);
+  if (onDemandEnabled === true || onDemandUsed != null || onDemandLimit != null) {
+    if (onDemandUsed != null && onDemandLimit != null)
+      detailParts.push(`On-Demand ${formatUsdFromCents(onDemandUsed)} / ${formatUsdFromCents(onDemandLimit)}`);
+    else if (onDemandUsed != null)
+      detailParts.push(`On-Demand ${formatUsdFromCents(onDemandUsed)}`);
+  }
+  if (detailParts.length === 0)
+    return null;
+  const remaining = autoUsed == null ? null : Math.max(0, +(100 - autoUsed).toFixed(1));
+  return {
+    used: autoUsed == null ? null : +autoUsed.toFixed(1),
+    limit: 100,
+    remaining,
+    detailText: detailParts.join(" | ")
+  };
+}
+function officialApiRequest(url, accessToken, method = "GET") {
   return new Promise((resolve, reject) => {
-    const url = new URL(API_BASE.replace(/\/$/, "") + endpoint);
-    const isHttps = url.protocol === "https:";
-    const postData = JSON.stringify(body);
-    const options = {
-      hostname: url.hostname,
-      port: url.port || (isHttps ? 443 : 80),
-      path: url.pathname + url.search,
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Content-Length": Buffer.byteLength(postData),
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; HeyCursor/1.0)"
+    const parsed = new URL(url);
+    const req = https.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || 443,
+        path: parsed.pathname + parsed.search,
+        method,
+        agent: false,
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+        },
+        timeout: 2e4
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk.toString();
+        });
+        res.on("end", () => {
+          const code = res.statusCode || 0;
+          if (code === 401 || code === 403) {
+            reject(new Error("OFFICIAL_AUTH"));
+            return;
+          }
+          if (code !== 200) {
+            reject(new Error(`OFFICIAL_HTTP_${code}`));
+            return;
+          }
+          try {
+            resolve(data ? JSON.parse(data) : {});
+          } catch {
+            reject(new Error("OFFICIAL_JSON"));
+          }
+        });
       }
-    };
-    const mod = isHttps ? https : http2;
-    const req = mod.request(options, (res) => {
-      let data = "";
-      res.on("data", (chunk) => {
-        data += chunk.toString();
-      });
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch {
-          resolve({ success: false, error: data ? data.slice(0, 200) : `HTTP ${res.statusCode}` });
-        }
-      });
-    });
+    );
     req.on("error", reject);
-    req.setTimeout(2e4, () => {
+    req.on("timeout", () => {
       req.destroy();
-      reject(new Error("\u8BF7\u6C42\u8D85\u65F6"));
+      reject(new Error("timeout"));
     });
-    req.write(postData);
+    if (method === "POST")
+      req.write("{}");
+    req.end();
+  });
+}
+function resolveMembershipFromStripeProfile(profile) {
+  if (!profile || typeof profile !== "object")
+    return null;
+  const membership = pickStringFromObj(profile, ["membership_type", "membershipType"]);
+  const individual = pickStringFromObj(profile, ["individual_membership_type", "individualMembershipType"]);
+  if (individual && individual.toLowerCase() !== "free" && (!membership || membership.toLowerCase() !== "enterprise"))
+    return individual;
+  return membership || individual || null;
+}
+async function fetchUserMetaOfficial(accessToken) {
+  return await officialApiRequest(CURSOR_GET_USER_META_URL, accessToken, "POST");
+}
+async function fetchStripeProfileOfficial(accessToken) {
+  try {
+    return await officialApiRequest(CURSOR_FULL_STRIPE_PROFILE_URL, accessToken, "GET");
+  } catch (e) {
+    if (e instanceof Error && /^OFFICIAL_HTTP_/.test(e.message) && e.message !== "OFFICIAL_HTTP_404") {
+      throw e;
+    }
+  }
+  const fallback = await officialApiRequest(CURSOR_STRIPE_PROFILE_URL, accessToken, "GET");
+  if (typeof fallback === "string")
+    return fallback.trim() ? { membership_type: "pro" } : null;
+  return fallback;
+}
+function fetchUsageSummaryOfficial(accessToken) {
+  return new Promise((resolve, reject) => {
+    const userId = extractWorkosUserIdFromJwt(accessToken);
+    if (!userId) {
+      reject(new Error("NO_WORKOS_SUB"));
+      return;
+    }
+    const cookie = `WorkosCursorSessionToken=${userId}%3A%3A${accessToken}`;
+    const req = https.request(
+      {
+        hostname: "cursor.com",
+        port: 443,
+        path: "/api/usage-summary",
+        method: "GET",
+        agent: false,
+        headers: {
+          Accept: "application/json",
+          Cookie: cookie,
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+        },
+        timeout: 2e4
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk.toString();
+        });
+        res.on("end", () => {
+          const code = res.statusCode || 0;
+          if (code === 401 || code === 403) {
+            reject(new Error("OFFICIAL_AUTH"));
+            return;
+          }
+          if (code !== 200) {
+            reject(new Error(`OFFICIAL_HTTP_${code}`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(data));
+          } catch {
+            reject(new Error("OFFICIAL_JSON"));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
     req.end();
   });
 }
@@ -999,31 +1270,44 @@ async function fetchCursorUsage() {
     return { success: false, error: "\u672A\u68C0\u6D4B\u5230 Cursor \u767B\u5F55\u4FE1\u606F" };
   }
   try {
-    const resp = await quotaApiRequest("/subscriptions/local-token-info", { token: auth.token });
-    if (!resp || !resp.success) {
-      const err = resp?.error || resp?.message || "\u4EE3\u7406\u63A5\u53E3\u8FD4\u56DE\u5931\u8D25";
-      return {
-        success: false,
-        error: `${err}\u3002\u53EF\u8BBE\u7F6E\u73AF\u5883\u53D8\u91CF MCP_API_BASE \u6307\u5411\u81EA\u5EFA\u4EE3\u7406\u3002`
-      };
-    }
-    const d = resp.data;
+    const [raw, metaResult, stripeResult] = await Promise.all([
+      fetchUsageSummaryOfficial(auth.token),
+      fetchUserMetaOfficial(auth.token).catch(() => null),
+      fetchStripeProfileOfficial(auth.token).catch(() => null)
+    ]);
+    const plan = getUsagePlan(raw);
+    const usagePct = officialUsagePercentFromRaw(raw);
+    const rawMembership = typeof raw?.membershipType === "string" ? raw.membershipType : null;
+    const membershipType = resolveMembershipFromStripeProfile(stripeResult) || rawMembership || auth.membershipType || "-";
+    const email = pickStringFromObj(metaResult, ["email"]) || auth.email || "-";
+    const totalCostCents = pickNumberFromObj(plan, ["used", "totalSpend", "total_spend"]) ?? 0;
+    const includedReqs = Array.isArray(raw?.includedUsageEvents) ? raw.includedUsageEvents.length : 0;
+    const onDemandReqs = Array.isArray(raw?.spendLimitEvents) ? raw.spendLimitEvents.length : 0;
     return {
       success: true,
-      email: d?.email ?? auth.email ?? "-",
-      membershipType: d?.membershipType ?? auth.membershipType ?? "-",
-      usagePct: d?.usagePct ?? null,
-      billingCycleStart: d?.billingStart ?? "",
-      billingCycleEnd: d?.billingEnd ?? "",
-      totalCost: d?.totalCost ?? 0,
-      eventsCount: d?.eventsCount ?? 0,
-      models: Array.isArray(d?.models) ? d.models : [],
-      autoQuota: d?.autoQuota ?? null
+      email,
+      membershipType,
+      usagePct: usagePct ?? null,
+      billingCycleStart: extractBillingCycleValue(raw, ["billingCycleStart", "billing_cycle_start", "start", "periodStart"]),
+      billingCycleEnd: extractBillingCycleValue(raw, ["billingCycleEnd", "billing_cycle_end", "end", "periodEnd"]),
+      totalCost: totalCostCents / 100,
+      eventsCount: includedReqs + onDemandReqs,
+      models: [],
+      autoQuota: buildAutoQuotaFromRaw(raw)
     };
   } catch (e) {
+    let error = e instanceof Error ? e.message : "\u67E5\u8BE2\u5931\u8D25";
+    if (error === "NO_WORKOS_SUB")
+      error = "Cursor access token \u7F3A\u5C11 WorkOS \u7528\u6237\u6807\u8BC6";
+    else if (error === "OFFICIAL_AUTH")
+      error = "Cursor \u767B\u5F55\u5DF2\u5931\u6548\uFF0C\u8BF7\u5728 Cursor \u91CC\u91CD\u65B0\u767B\u5F55";
+    else if (error === "OFFICIAL_JSON")
+      error = "Cursor \u5B98\u65B9\u63A5\u53E3\u8FD4\u56DE\u4E86\u65E0\u6CD5\u89E3\u6790\u7684\u6570\u636E";
+    else if (/^OFFICIAL_HTTP_/.test(error))
+      error = `Cursor \u5B98\u65B9\u63A5\u53E3\u8BF7\u6C42\u5931\u8D25\uFF08${error.replace("OFFICIAL_HTTP_", "HTTP ")}\uFF09`;
     return {
       success: false,
-      error: e instanceof Error ? e.message : "\u67E5\u8BE2\u5931\u8D25"
+      error
     };
   }
 }
