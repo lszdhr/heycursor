@@ -18,4 +18,6 @@
 
 ## 与 CueStack（HAP）的对齐（实现侧）
 
-HeyCursor `mcp-server.mjs`：**默认**单次 `check_messages` / `ask_question` 最长等待 **10 分钟**（`MESSENGER_MAX_WAIT_MS` 未设且未设 `MESSENGER_INFINITE_WAIT=1`），超时后返回系统提示并要求同轮再调，减轻「单次工具调用无限阻塞」与客户端超时的冲突；各工具返回追加 `[protocol]` 尾缀，复刻「工具返回里夹带约束」的做法。共享邮箱在本项目为 **`queue.json` + 会话文件**（非 SQLite）。可选 **`HEYCURSOR_KEEPALIVE_MS`** 由扩展进程写 `[KEEPALIVE]` 入队。
+HeyCursor `mcp-server.mjs`：**默认无限期**阻塞 `check_messages` / `ask_question`（未设 `MESSENGER_MAX_WAIT_MS`）；需要单次限时等待时再设 `MESSENGER_MAX_WAIT_MS` 或 `MESSENGER_FINITE_DEFAULT_MS`。各工具返回追加 `[protocol]` 尾缀。共享邮箱为 **`queue.json` + 会话文件**。
+
+扩展默认 **每 20 分钟** 写入 **`[KEEPALIVE]`**（`HEYCURSOR_KEEPALIVE_MS`，`0`/`off`/`false`/`no` 关闭），便于长时间无人输入时仍周期性走通 MCP 循环；**无法**保证 Cursor 不关、机器不休眠时仍不断连。

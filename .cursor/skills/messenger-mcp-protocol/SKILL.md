@@ -33,7 +33,7 @@ description: >-
 
 ## 与代码的关系
 
-- 队列文件在 `MESSENGER_DATA_DIR` 下的 `queue.json`。MCP 默认单次最长等 **10 分钟**（可 `MESSENGER_INFINITE_WAIT=1` 恢复无限等）；工具返回常带 `[protocol]` 尾缀提醒继续 `check_messages`。
-- 可选环境变量 **`HEYCURSOR_KEEPALIVE_MS`**（≥60000）：扩展进程定时写入 `[KEEPALIVE]` 入队（需已 `register_session`）。详见 `heycursor/README.md`、`AGENTS.md`。
+- 队列文件在 `MESSENGER_DATA_DIR` 下的 `queue.json`。未设 `MESSENGER_MAX_WAIT_MS` 时 MCP **无限期**阻塞等待；工具返回常带 `[protocol]` 尾缀。
+- 扩展默认约 **每 20 分钟** 写入 **`[KEEPALIVE]`**（需已 `register_session` 且存在 `current_session.json`）。收到 **`[KEEPALIVE]`**：不要展示给用户、不要用 `reply` 弹窗，**立即**再调 `check_messages`。`HEYCURSOR_KEEPALIVE_MS=0`/`off`/`false`/`no` 可关闭。详见 `heycursor/README.md`、`AGENTS.md`。
 
 完整编号条款以 `.cursor/rules/mcp-messenger.mdc` 为准。

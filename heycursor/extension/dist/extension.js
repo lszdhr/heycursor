@@ -1336,6 +1336,22 @@ function getMcpServerPath() {
   const extDir = path3.dirname(path3.dirname(__filename));
   return path3.join(extDir, "dist", "mcp-server.mjs");
 }
+var DEFAULT_HEYCURSOR_KEEPALIVE_MS = 1200000;
+function buildMessengerMcpEnv(dataDir, prevEnv) {
+  const env = typeof prevEnv === "object" && prevEnv !== null ? { ...prevEnv } : {};
+  env.MESSENGER_DATA_DIR = dataDir;
+  const hasFinite = (env.MESSENGER_MAX_WAIT_MS !== void 0 && String(env.MESSENGER_MAX_WAIT_MS).trim() !== "") || (env.MESSENGER_FINITE_DEFAULT_MS !== void 0 && String(env.MESSENGER_FINITE_DEFAULT_MS).trim() !== "");
+  if (!hasFinite && (env.MESSENGER_INFINITE_WAIT === void 0 || String(env.MESSENGER_INFINITE_WAIT).trim() === ""))
+    env.MESSENGER_INFINITE_WAIT = "1";
+  return env;
+}
+function buildMessengerMcpEntry(dataDir, prevEntry) {
+  return {
+    command: "node",
+    args: [getMcpServerPath()],
+    env: buildMessengerMcpEnv(dataDir, prevEntry?.env)
+  };
+}
 function getWorkspaceName() {
   const folders = vscode.workspace.workspaceFolders;
   return folders && folders.length > 0 ? folders[0].name : "default";
@@ -1397,11 +1413,8 @@ function setupMcpConfigGlobal() {
   }
   if (!config.mcpServers)
     config.mcpServers = {};
-  config.mcpServers[MCP_DISPLAY_NAME2] = {
-    command: "node",
-    args: [getMcpServerPath()],
-    env: { MESSENGER_DATA_DIR: ROOT_DATA_DIR2 }
-  };
+  const prevG = config.mcpServers[MCP_DISPLAY_NAME2];
+  config.mcpServers[MCP_DISPLAY_NAME2] = buildMessengerMcpEntry(ROOT_DATA_DIR2, prevG);
   const nextContent = JSON.stringify(config, null, 2);
   const previousContent = fs3.existsSync(GLOBAL_MCP_JSON) ? fs3.readFileSync(GLOBAL_MCP_JSON, "utf-8") : "";
   if (nextContent !== previousContent) {
@@ -1454,13 +1467,10 @@ function ensureMcpConfigInWorkspaces(workspaceFolders) {
   }
   if (!config.mcpServers)
     config.mcpServers = {};
-  const entry = {
-    command: "node",
-    args: [getMcpServerPath()],
-    env: { MESSENGER_DATA_DIR: dataDir }
-  };
   const prevEntry = config.mcpServers[MCP_DISPLAY_NAME2];
-  if (prevEntry?.env?.MESSENGER_DATA_DIR === dataDir)
+  const entry = buildMessengerMcpEntry(dataDir, prevEntry);
+  const prevJson = prevEntry ? JSON.stringify(prevEntry) : "";
+  if (prevJson === JSON.stringify(entry))
     return 0;
   config.mcpServers[MCP_DISPLAY_NAME2] = entry;
   fs3.writeFileSync(mcpJsonPath, JSON.stringify(config, null, 2), "utf-8");
@@ -1936,8 +1946,18 @@ function activate(context) {
   startPolling();
   autoSetupMcp(folders);
   let keepaliveTimer = null;
-  const keepaliveMs = Number(process.env.HEYCURSOR_KEEPALIVE_MS);
-  if (Number.isFinite(keepaliveMs) && keepaliveMs >= 6e4) {
+  const rawKa = process.env.HEYCURSOR_KEEPALIVE_MS;
+  let keepaliveMs = DEFAULT_HEYCURSOR_KEEPALIVE_MS;
+  if (rawKa !== void 0 && rawKa !== "") {
+    const t = String(rawKa).trim().toLowerCase();
+    if (t === "0" || t === "off" || t === "false" || t === "no")
+      keepaliveMs = null;
+    else {
+      const n = Number(rawKa);
+      keepaliveMs = Number.isFinite(n) && n > 0 ? Math.max(6e4, n) : DEFAULT_HEYCURSOR_KEEPALIVE_MS;
+    }
+  }
+  if (keepaliveMs != null) {
     keepaliveTimer = setInterval(() => {
       try {
         const fp = path3.join(getDataDir(), "current_session.json");

@@ -35,16 +35,26 @@ node tools/patch-extension-id.cjs
 
 | 环境变量 | 作用 |
 |----------|------|
-| `MESSENGER_MAX_WAIT_MS` | 单次 `check_messages` / `ask_question` 最长等待（毫秒）。**未设置时默认 600000（10 分钟）**，超时返回系统提示后须**同轮再次**调用（避免部分客户端对「无限期阻塞」不友好） |
-| `MESSENGER_INFINITE_WAIT=1` | 且未设置 `MESSENGER_MAX_WAIT_MS` 时，恢复**无限期**等待（旧行为） |
+| （默认） | **未设置** `MESSENGER_MAX_WAIT_MS` 时，服务端 **无限期** 阻塞等待，适合「一早挂上 MCP、整天不讲话也尽量不断」 |
+| `MESSENGER_MAX_WAIT_MS` | 设为有限毫秒数时，单次 `check_messages` / `ask_question` 最长等待该时长，超时返回系统提示后须**同轮再次**调用 |
+| `MESSENGER_FINITE_DEFAULT_MS` | 在未设置 `MESSENGER_MAX_WAIT_MS` 时仍希望有默认上限时使用（一般不必） |
 | `MESSENGER_POLL_INTERVAL_MS` | 轮询队列间隔（毫秒），默认 `100` |
 | `MESSENGER_HEARTBEAT_INTERVAL_MS` | 向客户端发 logging heartbeat 间隔，默认 `8000` |
 
+工作区 **`setupMcp` 写入的 `mcp.json`** 会在未配置有限等待时带上 **`MESSENGER_INFINITE_WAIT":"1"`**（与默认行为一致，便于阅读配置）。
+
 工具返回末尾会追加 `[protocol] …` 短提醒，强制模型继续 `check_messages`（类似 cuemcp 在返回里夹带约束文案）。
 
-## 扩展内无感保活（可选）
+## 扩展内无感保活（默认开启）
 
-若 MCP 会话已 `register_session` 且存在 `current_session.json`，可设 **`HEYCURSOR_KEEPALIVE_MS`**（毫秒，建议 ≥600000）：扩展进程定时向队列写入 `[KEEPALIVE]…`（带当前 `session_tag`），不依赖外部终端脚本，避免被 IDE 回收终端时断掉。
+扩展进程会按 **`current_session.json`** 里的 `session_tag`，默认 **每 20 分钟** 向队列写入一条 **`[KEEPALIVE]…`**（不依赖外部脚本），用于在长时间无人说话时仍周期性唤醒 `check_messages` 循环，减轻部分环境下 MCP/长阻塞被闲置回收的概率。
+
+| 环境变量 | 作用 |
+|----------|------|
+| （默认） | **20 分钟**（`1200000` ms）一条 `[KEEPALIVE]` |
+| `HEYCURSOR_KEEPALIVE_MS` | 自定义间隔（毫秒，≥`60000` 生效）；设为 **`0`** / **`off`** / **`false`** / **`no`** 可**关闭**保活 |
+
+说明：能否「从早挂到晚」仍取决于 **Cursor 是否关闭、电脑是否休眠、网络/进程是否被系统杀掉**；保活只是降低闲置断连概率，**不能**违背客户端或操作系统的生命周期。
 
 ## 打 VSIX
 
