@@ -36,7 +36,7 @@ node tools/patch-extension-id.cjs
 | 环境变量 | 作用 |
 |----------|------|
 | （默认） | **未设置** `MESSENGER_MAX_WAIT_MS` 时，服务端 **无限期** 阻塞等待，适合「一早挂上 MCP、整天不讲话也尽量不断」 |
-| `MESSENGER_MAX_WAIT_MS` | 设为有限毫秒数时，单次 `check_messages` / `ask_question` 最长等待该时长，超时返回系统提示后须**同轮再次**调用 |
+| `MESSENGER_MAX_WAIT_MS` | 设为有限毫秒数时，单次 `check_messages` / `ask_question` / `messenger_pause` 最长等待该时长，超时返回系统提示后须**同轮再次**调用 |
 | `MESSENGER_FINITE_DEFAULT_MS` | 在未设置 `MESSENGER_MAX_WAIT_MS` 时仍希望有默认上限时使用（一般不必） |
 | `MESSENGER_POLL_INTERVAL_MS` | 轮询队列间隔（毫秒），默认 `100` |
 | `MESSENGER_HEARTBEAT_INTERVAL_MS` | 向客户端发 logging heartbeat 间隔，默认 `8000` |
@@ -44,6 +44,8 @@ node tools/patch-extension-id.cjs
 工作区 **`setupMcp` 写入的 `mcp.json`** 会在未配置有限等待时带上 **`MESSENGER_INFINITE_WAIT":"1"`**（与默认行为一致，便于阅读配置）。
 
 工具返回末尾会追加 `[protocol] …` 短提醒，强制模型继续 `check_messages`（类似 cuemcp 在返回里夹带约束文案）。
+
+其它 MCP 工具（节选）：`propose_session_tag`、`register_session`（可选 `label`）、`recall_sessions`、`messenger_pause`（单按钮「继续」，与 `ask_question` 共用问答管道）。扩展内置规则正文为 `extension/dist/mcp-messenger-bundled.mdc`，应与仓库 `.cursor/rules/mcp-messenger.mdc` 同步。
 
 ## 扩展内无感保活（默认开启）
 

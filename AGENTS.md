@@ -18,6 +18,6 @@
 
 ## 与 CueStack（HAP）的对齐（实现侧）
 
-HeyCursor `mcp-server.mjs`：**默认无限期**阻塞 `check_messages` / `ask_question`（未设 `MESSENGER_MAX_WAIT_MS`）；需要单次限时等待时再设 `MESSENGER_MAX_WAIT_MS` 或 `MESSENGER_FINITE_DEFAULT_MS`。各工具返回追加 `[protocol]` 尾缀。共享邮箱为 **`queue.json` + 会话文件**。
+HeyCursor `mcp-server.mjs`：**默认无限期**阻塞 `check_messages` / `ask_question` / `messenger_pause`（未设 `MESSENGER_MAX_WAIT_MS`）；需要单次限时等待时再设 `MESSENGER_MAX_WAIT_MS` 或 `MESSENGER_FINITE_DEFAULT_MS`。各工具返回追加 `[protocol]` 尾缀。共享邮箱为 **`queue.json` + 会话文件**。补充工具：`propose_session_tag`、`register_session` 的 `label`、`recall_sessions`（按 `hints` 筛 `session_tag`/`label`）；`writeQueue` 对 `queue.json` 使用临时文件再 rename，降低半写风险。
 
 扩展默认 **每 15 分钟** 写入 **`[KEEPALIVE]`**（`HEYCURSOR_KEEPALIVE_MS`，`0`/`off`/`false`/`no` 关闭），便于长时间无人输入时仍周期性走通 MCP 循环；**无法**保证 Cursor 不关、机器不休眠时仍不断连。

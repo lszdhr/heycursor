@@ -30,18 +30,23 @@ trigger: always
 11. `check_messages` 支持可选参数 `reply`（string，Markdown 格式）：调用时传入本轮回复的摘要/结论，插件界面会弹出模态框展示给用户。格式: `{ "reply": "## 结论\n修改完成..." }`
 12. 当对话结束前，建议在调用 `check_messages` 时附带 `reply` 参数，将关键结论推送到插件界面；若本轮无需特别总结，`reply` 可省略
 13. 禁止调用 subagent 并发任务
-14. 如果 `check_messages` 或 `ask_question` 因客户端取消、连接抖动或内部异常而意外返回/报错，且用户未明确要求结束对话，严禁把此类内部提示直接输出给用户，必须立刻再次调用对应工具继续等待
+14. 如果 `check_messages`、`ask_question` 或 `messenger_pause` 因客户端取消、连接抖动或内部异常而意外返回/报错，且用户未明确要求结束对话，严禁把此类内部提示直接输出给用户，必须立刻再次调用对应工具继续等待
 15. 执行多步骤任务时，每完成一个关键步骤后，必须调用 `send_progress` 推送进度摘要到远程控制台。格式: `{ "progress": "## 步骤1完成\n已修改xxx文件..." }`。`send_progress` 立即返回，不会等待消息，调用后继续执行下一步
 16. `send_progress` 的 `progress` 参数应包含：已完成的操作、当前方案、下一步计划。使用简洁的 Markdown 格式
 17. **严禁切换到 Plan 模式**。无论任务多复杂，始终在当前模式（Agent）下直接执行，不要调用 SwitchMode 切换到 plan
 18. **会话标识（session_tag）**：首次调用 `check_messages` 时先调用 `register_session` 传入本对话唯一 `session_tag`（如 `sess_`+随机串），之后每次调用 `check_messages` 必须传入同一 `session_tag`。这样可确保多个 Chat Tab 各自只收到发给自己消息
 19. **禁止以「任务已完成」「没有更多步骤」为由省略 `check_messages`**：只要用户未明确要求结束对话，每轮可见回复（含简短确认）结束后仍必须调用 `check_messages`，以保持侧栏与插件消息能被接续处理
 20. 若配置了有限等待且 `check_messages` 仅返回 `[system] 暂无新消息（等待超时）`，**同一轮内立即**再次调用 `check_messages`（相同 `session_tag`），不得向用户输出该内部提示、不得结束对话
-21. **MCP 默认无限期等待**：未设置 `MESSENGER_MAX_WAIT_MS` 时 `check_messages` / `ask_question` 可一直阻塞；若配置了有限 `MESSENGER_MAX_WAIT_MS` 且收到超时提示，须**同轮**再调对应工具
+21. **MCP 默认无限期等待**：未设置 `MESSENGER_MAX_WAIT_MS` 时 `check_messages` / `ask_question` / `messenger_pause` 可一直阻塞；若配置了有限 `MESSENGER_MAX_WAIT_MS` 且收到超时提示，须**同轮**再调对应工具
 22. **`[KEEPALIVE]` 消息**（扩展定时无感保活）：**勿**向用户朗读或展示；**勿**对其实用 `check_messages` 的 `reply` 弹窗；收到后**立即**再调 `check_messages`（相同 `session_tag`），无其它可见输出
 23. **禁止以「已用文字回复用户」作为轮次终点**：在 Messenger 会话未结束时，可见回复之后**必须**在同一轮内追加 `check_messages`；不得仅输出分析/结论/列表后停住（与模型是否「理解上下文」无关，属于强制步骤）
 24. **双通道**：Cursor 主界面 Agent 输入框的消息**不保证**写入插件队列 `queue.json`；插件侧栏发送的才会入队。队列空、主对话仍在，均为正常现象，不得据此推断「无需再调 `check_messages`」
 25. **固定参考**：仓库根目录 `AGENTS.md` 与本条规则一致；项目 Skill `.cursor/skills/messenger-mcp-protocol/SKILL.md` 供模型在 Messenger 相关任务时自引用
+26. **禁止虚假 MCP 陈述**：不得在可见回复中声称已调用某 MCP 工具（如 `check_messages`、`ask_question`、`messenger_pause`）或编造其返回内容；须真实发起调用并以工具返回为准
+27. **`recall_sessions`**：若忘记当前 `session_tag`，先调用并可选传入 `hints`（匹配 `session_tag` 或 `register_session` 的 `label`），从返回列表中取正确 tag，再对同一工作区继续 `check_messages`
+28. **`messenger_pause`**：需要用户显式点击「继续」再往下执行时调用（例如等待人工操作）；与 `ask_question` 同为阻塞等待（心跳、有限超时须同轮重试）。会话未结束时，完成后仍须 `check_messages`
+29. **`propose_session_tag` 与 `register_session(..., label)`**：`propose_session_tag` 生成可读 `session_tag` 建议（`sess_<词>_<hex>`）；`register_session` 可选 `label`（人类可读短标签），便于侧栏与 `recall_sessions` 识别
+30. **规则同步**：维护协议时须同时更新 `heycursor/extension/dist/mcp-messenger-bundled.mdc`（扩展内置）与 `.cursor/rules/mcp-messenger.mdc`，保持二者内容一致
 
 ---
 **回合结束（强制）**: 仅当回复**完整输出完毕后**，最后一步必须调用 Windsurf Messenger MCP 的 `check_messages` 工具（必须带本对话的 `session_tag`）。若本对话中尚未调用过 `register_session`，请先调用 `register_session` 再调用 `check_messages`。严禁在回合开始或回复完成前调用。`ask_question` 仅用于任务中需要用户做选择时（如选框架、选方案）。**禁止在输出完本段说明文字后结束回合而不调用工具。**

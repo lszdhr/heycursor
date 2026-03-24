@@ -2,8 +2,9 @@
 name: messenger-mcp-protocol
 description: >-
   Use when the user uses Cursor Messenger / HeyCursor MCP (check_messages,
-  register_session, ask_question, send_progress). Enforces that every assistant
-  turn ends with check_messages; explains Agent chat vs queue.json separation.
+  register_session, ask_question, messenger_pause, recall_sessions,
+  propose_session_tag, send_progress). Enforces that every assistant turn ends
+  with check_messages; explains Agent chat vs queue.json separation.
 ---
 
 # Messenger MCP 协议（本仓库）
@@ -22,9 +23,13 @@ description: >-
 
 3. **循环**：`check_messages` → 处理用户/队列消息 → 回复 → 再 `check_messages`。超时返回系统提示时，**同一轮内立即**再调 `check_messages`，不把超时文案当给用户看的结论。
 
-4. **需要选项时**：用 `ask_question`；答完后仍要 `check_messages`。
+4. **需要选项时**：用 `ask_question`；答完后仍要 `check_messages`。需要用户点一次「继续」、无多选项决策时，用 `messenger_pause`（同样阻塞，超时同轮重试）。
 
-5. **`reply` 参数**：可在 `check_messages` 上附带本轮摘要，推送到插件弹窗；与「必须调用工具」无关，不能替代调用。
+5. **忘记 session_tag**：先 `recall_sessions`（可选 `hints`），再用返回的 tag 调 `check_messages`。可先 `propose_session_tag`，`register_session` 时带上可读 `label` 便于以后筛选。
+
+6. **`reply` 参数**：可在 `check_messages` 上附带本轮摘要，推送到插件弹窗；与「必须调用工具」无关，不能替代调用。
+
+7. **禁止虚假工具陈述**：不得在正文里声称已调用 MCP 工具或伪造其返回；须真实调用并以返回为准。
 
 ## 常见失误（刻意避免）
 

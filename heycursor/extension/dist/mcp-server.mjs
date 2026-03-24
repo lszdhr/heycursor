@@ -21064,7 +21064,18 @@ function filterQueueBySession(queue, sessionTag) {
   return queue.filter((item) => item.session_id == null || item.session_id === sessionTag);
 }
 async function writeQueue(items) {
-  await fs.writeFile(QUEUE_FILE, JSON.stringify(items, null, 2), "utf-8");
+  const tmp = `${QUEUE_FILE}.tmp.${process.pid}.${Date.now()}`;
+  await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
+  await fs.rename(tmp, QUEUE_FILE);
+}
+async function readKnownSessionsList() {
+  try {
+    const raw = await fs.readFile(KNOWN_SESSIONS_FILE, "utf-8");
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 async function sleepWithAbort(signal, ms) {
   if (signal?.aborted)
@@ -21219,11 +21230,79 @@ async function emitHeartbeat(extra, message) {
   } catch {
   }
 }
+var PROPOSE_TAG_WORDS = ["red", "blue", "wolf", "oak", "swift", "calm", "nova", "apex", "lake", "ruby", "dusk", "dawn"];
+async function waitForAnswerOrTimeout(questionData, extra, logLabel, heartbeatMessage) {
+  await ensureDataDir();
+  await fs.writeFile(QUESTION_FILE, JSON.stringify(questionData, null, 2), "utf-8");
+  try {
+    await fs.unlink(ANSWER_FILE);
+  } catch {
+  }
+  const waitStart = Date.now();
+  let nextHeartbeatAt = Date.now() + HEARTBEAT_INTERVAL;
+  while (!extra.signal?.aborted) {
+    try {
+      const raw = await fs.readFile(ANSWER_FILE, "utf-8");
+      const answerData = JSON.parse(raw);
+      if (answerData.id !== questionData.id)
+        continue;
+      try {
+        await fs.unlink(QUESTION_FILE);
+      } catch {
+      }
+      try {
+        await fs.unlink(ANSWER_FILE);
+      } catch {
+      }
+      return { ok: true, answerData };
+    } catch {
+    }
+    if (Number.isFinite(MAX_WAIT_MS) && Date.now() - waitStart >= MAX_WAIT_MS) {
+      await appendServerLog("info", `${logLabel} timed out after ${MAX_WAIT_MS}ms, requesting re-call`);
+      return { ok: false, timeout: true };
+    }
+    if (Date.now() >= nextHeartbeatAt) {
+      await emitHeartbeat(
+        extra,
+        heartbeatMessage || `${MCP_DISPLAY_NAME} is still waiting for the user's answer.`
+      );
+      nextHeartbeatAt = Date.now() + HEARTBEAT_INTERVAL;
+    }
+    const keepWaiting = await sleepWithAbort(extra.signal, POLL_INTERVAL);
+    if (!keepWaiting)
+      return { ok: false, cancelled: true };
+  }
+  await appendServerLog("warn", `${logLabel} was cancelled by the client while waiting`);
+  return { ok: false, cancelled: true };
+}
+server.tool(
+  "propose_session_tag",
+  "\u751F\u6210\u53EF\u8BFB\u7684 session_tag \u5EFA\u8BAE\u503C\uFF08\u683C\u5F0F sess_\u8BCD\u6C47_6\u4F4D hex\uFF09\u3002\u53EF\u4F5C\u4E3A register_session \u7684\u53C2\u8003\u3002",
+  {},
+  async () => {
+    const w = PROPOSE_TAG_WORDS[Math.floor(Math.random() * PROPOSE_TAG_WORDS.length)];
+    const hex = Math.random().toString(16).slice(2, 8);
+    const tag = `sess_${w}_${hex}`;
+    await appendServerLog("info", `propose_session_tag: ${tag}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `[system] suggested session_tag: ${tag}
+\u5EFA\u8BAE\uFF1A\u8C03\u7528 register_session(session_tag="${tag}", label="...") \u6216\u81EA\u5B9A\u4E49 tag\u3002` + MESSENGER_PROTOCOL_TAIL
+        }
+      ]
+    };
+  }
+);
 server.tool(
   "register_session",
-  "\u6CE8\u518C\u5F53\u524D\u5BF9\u8BDD\u7684\u4F1A\u8BDD\u6807\u8BC6\uFF08session_tag\uFF09\u3002\u5728\u540C\u4E00\u5DE5\u4F5C\u533A\u591A\u4F1A\u8BDD\u65F6\uFF0C\u5FC5\u987B\u5148\u8C03\u7528\u6B64\u5DE5\u5177\uFF08\u4F20\u5165\u552F\u4E00 session_tag\uFF09\uFF0C\u4E4B\u540E\u672C\u4F1A\u8BDD\u7684 check_messages \u5FC5\u987B\u59CB\u7EC8\u4F20\u5165\u540C\u4E00 session_tag\u3002\u5EFA\u8BAE\u5728\u5BF9\u8BDD\u9996\u8F6E\u6216\u9996\u6B21\u4F7F\u7528 Cursor Messenger \u65F6\u8C03\u7528\u4E00\u6B21\uFF0Csession_tag \u7531\u4F60\u751F\u6210\uFF08\u5982 sess_ \u52A0\u968F\u673A\u4E32\uFF09\u3002",
-  { session_tag: external_exports.string().describe("\u5F53\u524D\u5BF9\u8BDD\u7684\u552F\u4E00\u4F1A\u8BDD\u6807\u8BC6\uFF0C\u7531 AI \u751F\u6210\uFF08\u5982 sess_ \u52A0\u968F\u673A\u5B57\u7B26\u4E32\uFF09") },
-  async ({ session_tag }) => {
+  "\u6CE8\u518C\u5F53\u524D\u5BF9\u8BDD\u7684\u4F1A\u8BDD\u6807\u8BC6\uFF08session_tag\uFF09\u3002\u53EF\u9009 label \u4F9B\u4EBA\u7C7B\u8BFB\u61C2\u4E0E recall_sessions \u7B5B\u9009\u3002\u5728\u540C\u4E00\u5DE5\u4F5C\u533A\u591A\u4F1A\u8BDD\u65F6\uFF0C\u5FC5\u987B\u5148\u8C03\u7528\u6B64\u5DE5\u5177\uFF0C\u4E4B\u540E check_messages \u59CB\u7EC8\u4F20\u5165\u540C\u4E00 session_tag\u3002\u53EF\u5148\u7528 propose_session_tag \u751F\u6210\u5EFA\u8BAE tag\u3002",
+  {
+    session_tag: external_exports.string().describe("\u552F\u4E00\u4F1A\u8BDD\u6807\u8BC6\uFF08\u5982 sess_wolf_a1b2c3\uFF09"),
+    label: external_exports.string().optional().describe("\u53EF\u9009\u4EBA\u7C7B\u6807\u7B7E\uFF08\u7528\u4E8E recall_sessions \u4E0E\u4FA7\u680F\u5217\u8868\uFF09")
+  },
+  async ({ session_tag, label }) => {
     await ensureDataDir();
     await fs.writeFile(
       CURRENT_SESSION_FILE,
@@ -21240,16 +21319,73 @@ server.tool(
       } catch {
       }
       const now2 = (/* @__PURE__ */ new Date()).toISOString();
+      const friendly = label && String(label).trim() ? String(label).trim() : null;
       const idx2 = list.findIndex((x) => x && x.session_tag === session_tag);
       if (idx2 >= 0) {
-        list[idx2] = { session_tag, label: list[idx2].label || session_tag, updated_at: now2 };
+        list[idx2] = {
+          session_tag,
+          label: friendly || list[idx2].label || session_tag,
+          updated_at: now2
+        };
       } else {
-        list.push({ session_tag, label: session_tag, updated_at: now2 });
+        list.push({ session_tag, label: friendly || session_tag, updated_at: now2 });
       }
       await fs.writeFile(KNOWN_SESSIONS_FILE, JSON.stringify(list, null, 2), "utf-8");
     } catch {
     }
     return { content: [{ type: "text", text: `[system] \u5DF2\u5C06\u4F1A\u8BDD\u6CE8\u518C\u4E3A ${session_tag}\u3002\u4E4B\u540E\u8BF7\u5728\u672C\u5BF9\u8BDD\u4E2D\u8C03\u7528 check_messages \u65F6\u59CB\u7EC8\u4F20\u5165 session_tag: "${session_tag}"\u3002` + MESSENGER_PROTOCOL_TAIL }] };
+  }
+);
+server.tool(
+  "recall_sessions",
+  "\u5217\u51FA\u6216\u6309\u5173\u952E\u8BCD\u7B5B\u9009\u5DF2\u77E5\u4F1A\u8BDD\uFF08known_sessions\uFF09\u3002\u5FD8\u8BB0 session_tag \u65F6\u5148\u8C03\u7528\u672C\u5DE5\u5177\uFF0C\u518D\u7528\u8FD4\u56DE\u7684 session_tag \u7EE7\u7EED check_messages\u3002",
+  {
+    hints: external_exports.string().optional().describe("\u53EF\u9009\uFF1A\u5339\u914D session_tag \u6216 label \u7684\u5B50\u4E32\uFF08\u4E0D\u533A\u5206\u5927\u5C0F\u5199\uFF09"),
+    limit: external_exports.number().optional().describe("\u6700\u591A\u8FD4\u56DE\u6761\u6570\uFF0C\u9ED8\u8BA4 20\uFF0C\u6700\u5927 50")
+  },
+  async ({ hints, limit }) => {
+    await ensureDataDir();
+    let list = await readKnownSessionsList();
+    list.sort((a, b) => {
+      const ta = new Date(a.updated_at || 0).getTime();
+      const tb = new Date(b.updated_at || 0).getTime();
+      return tb - ta;
+    });
+    if (hints && String(hints).trim()) {
+      const h = String(hints).trim().toLowerCase();
+      list = list.filter((x) => {
+        const tag = String(x.session_tag || "").toLowerCase();
+        const lab = String(x.label || "").toLowerCase();
+        return tag.includes(h) || lab.includes(h);
+      });
+    }
+    const lim = Math.min(Math.max(limit != null && Number.isFinite(limit) ? limit : 20, 1), 50);
+    list = list.slice(0, lim);
+    if (list.length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `[system] \u672A\u627E\u5230\u5339\u914D\u7684\u4F1A\u8BDD\u3002\u53EF\u5148 register_session\uFF0C\u6216\u6362 hints \u518D\u8BD5\u3002` + MESSENGER_PROTOCOL_TAIL
+          }
+        ]
+      };
+    }
+    const lines = list.map(
+      (x) => `- session_tag: ${x.session_tag}
+  label: ${x.label || ""}
+  updated_at: ${x.updated_at || ""}`
+    );
+    return {
+      content: [
+        {
+          type: "text",
+          text: `[system] \u5339\u914D\u5230 ${list.length} \u6761\u4F1A\u8BDD\uFF1A
+
+${lines.join("\n")}` + MESSENGER_PROTOCOL_TAIL
+        }
+      ]
+    };
   }
 );
 server.tool(
@@ -21386,7 +21522,6 @@ server.tool(
     ).describe("\u95EE\u9898\u5217\u8868\uFF0C\u652F\u6301\u591A\u4E2A\u95EE\u9898\u540C\u65F6\u63D0\u95EE")
   },
   async ({ questions }, extra) => {
-    await ensureDataDir();
     await appendServerLog("info", "ask_question started");
     const questionItems = questions.map((q, i) => ({
       id: "q" + i,
@@ -21399,75 +21534,99 @@ server.tool(
       questions: questionItems,
       timestamp: (/* @__PURE__ */ new Date()).toISOString()
     };
-    await fs.writeFile(QUESTION_FILE, JSON.stringify(questionData, null, 2), "utf-8");
-    try {
-      await fs.unlink(ANSWER_FILE);
-    } catch {
-    }
-    const waitStart = Date.now();
-    let nextHeartbeatAt = Date.now() + HEARTBEAT_INTERVAL;
-    while (!extra.signal?.aborted) {
-      try {
-        const raw = await fs.readFile(ANSWER_FILE, "utf-8");
-        const answerData = JSON.parse(raw);
-        if (answerData.id !== questionData.id)
+    const result = await waitForAnswerOrTimeout(questionData, extra, "ask_question");
+    if (result.ok) {
+      const answerData = result.answerData;
+      const answers = answerData.answers || [];
+      const parts = [];
+      for (const qItem of questionItems) {
+        const ans = answers.find((a) => a.questionId === qItem.id);
+        if (!ans)
           continue;
-        try {
-          await fs.unlink(QUESTION_FILE);
-        } catch {
+        const selected = ans.selected || [];
+        const other = ans.other || "";
+        let text = "";
+        if (selected.length > 0) {
+          const labels = selected.map(
+            (sid) => qItem.options.find((o) => o.id === sid)?.label || sid
+          );
+          text = "\u9009\u62E9: " + labels.join(", ");
         }
-        try {
-          await fs.unlink(ANSWER_FILE);
-        } catch {
+        if (other) {
+          text += text ? "\n\u7528\u6237\u8865\u5145: " + other : "\u7528\u6237\u56DE\u7B54: " + other;
         }
-        const answers = answerData.answers || [];
-        const parts = [];
-        for (const qItem of questionItems) {
-          const ans = answers.find((a) => a.questionId === qItem.id);
-          if (!ans)
-            continue;
-          const selected = ans.selected || [];
-          const other = ans.other || "";
-          let text = "";
-          if (selected.length > 0) {
-            const labels = selected.map(
-              (sid) => qItem.options.find((o) => o.id === sid)?.label || sid
-            );
-            text = "\u9009\u62E9: " + labels.join(", ");
-          }
-          if (other) {
-            text += text ? "\n\u7528\u6237\u8865\u5145: " + other : "\u7528\u6237\u56DE\u7B54: " + other;
-          }
-          if (text) {
-            parts.push(
-              questionItems.length > 1 ? `\u3010${qItem.question}\u3011
+        if (text) {
+          parts.push(
+            questionItems.length > 1 ? `\u3010${qItem.question}\u3011
 ${text}` : text
-            );
-          }
+          );
         }
-        const finalText = parts.length > 0 ? parts.join("\n\n") : "(\u7528\u6237\u672A\u4F5C\u7B54)";
-        await appendServerLog("info", "ask_question received user answer");
-        return { content: [{ type: "text", text: finalText + MESSENGER_PROTOCOL_TAIL }] };
-      } catch {
       }
-      if (Number.isFinite(MAX_WAIT_MS) && Date.now() - waitStart >= MAX_WAIT_MS) {
-        await appendServerLog("info", `ask_question timed out after ${MAX_WAIT_MS}ms, requesting re-call`);
-        return { content: [{ type: "text", text: ASK_QUESTION_TIMEOUT_TEXT }] };
-      }
-      if (Date.now() >= nextHeartbeatAt) {
-        await emitHeartbeat(extra, `${MCP_DISPLAY_NAME} is still waiting for the user's answer.`);
-        nextHeartbeatAt = Date.now() + HEARTBEAT_INTERVAL;
-      }
-      const keepWaiting = await sleepWithAbort(extra.signal, POLL_INTERVAL);
-      if (!keepWaiting)
-        break;
+      const finalText = parts.length > 0 ? parts.join("\n\n") : "(\u7528\u6237\u672A\u4F5C\u7B54)";
+      await appendServerLog("info", "ask_question received user answer");
+      return { content: [{ type: "text", text: finalText + MESSENGER_PROTOCOL_TAIL }] };
     }
-    await appendServerLog("warn", "ask_question was cancelled by the client while waiting");
+    if (result.timeout) {
+      return { content: [{ type: "text", text: ASK_QUESTION_TIMEOUT_TEXT }] };
+    }
     return {
       content: [
         {
           type: "text",
           text: "[system] ask_question \u7B49\u5F85\u88AB\u5BA2\u6237\u7AEF\u4E2D\u65AD\u3002\u82E5\u4ECD\u9700\u8981\u7528\u6237\u56DE\u7B54\uFF0C\u8BF7\u4E0D\u8981\u5411\u7528\u6237\u8F93\u51FA\u8FD9\u6761\u5185\u90E8\u63D0\u793A\uFF0C\u76F4\u63A5\u518D\u6B21\u8C03\u7528 ask_question\u3002" + MESSENGER_PROTOCOL_TAIL
+        }
+      ],
+      isError: true
+    };
+  }
+);
+server.tool(
+  "messenger_pause",
+  "\u6682\u505C\u5E76\u5728\u63D2\u4EF6\u4E2D\u663E\u793A\u5355\u4E2A\u300C\u7EE7\u7EED\u300D\u6309\u94AE\uFF1B\u7528\u6237\u70B9\u51FB\u540E\u624D\u7EE7\u7EED\u3002\u4E0E ask_question \u540C\u6837\u4F1A\u6301\u7EED\u7B49\u5F85\uFF08\u5FC3\u8DF3 + \u8D85\u65F6\u91CD\u8BD5\uFF09\u3002",
+  {
+    message: external_exports.string().optional().describe("\u53EF\u9009\u63D0\u793A\u6587\u672C\uFF08\u663E\u793A\u5728\u6682\u505C\u5361\u7247\u4E0A\uFF09")
+  },
+  async ({ message }, extra) => {
+    await appendServerLog("info", "messenger_pause started");
+    const hint = message && String(message).trim() ? String(message).trim() : "\u8BF7\u5728\u7EE7\u7EED\u524D\u786E\u8BA4\u5F53\u524D\u72B6\u6001\u3002";
+    const questionData = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+      questions: [
+        {
+          id: "pause0",
+          question: hint,
+          options: [{ id: "continue", label: "\u7EE7\u7EED" }],
+          allow_multiple: false
+        }
+      ],
+      timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      kind: "messenger_pause"
+    };
+    const result = await waitForAnswerOrTimeout(
+      questionData,
+      extra,
+      "messenger_pause",
+      `${MCP_DISPLAY_NAME} is waiting for the user to tap Continue.`
+    );
+    if (result.ok) {
+      await appendServerLog("info", "messenger_pause continued");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `[system] \u7528\u6237\u5DF2\u7EE7\u7EED\u3002` + MESSENGER_PROTOCOL_TAIL
+          }
+        ]
+      };
+    }
+    if (result.timeout) {
+      return { content: [{ type: "text", text: ASK_QUESTION_TIMEOUT_TEXT }] };
+    }
+    return {
+      content: [
+        {
+          type: "text",
+          text: "[system] messenger_pause \u7B49\u5F85\u88AB\u5BA2\u6237\u7AEF\u4E2D\u65AD\u3002\u82E5\u4ECD\u9700\u8981\u6682\u505C\uFF0C\u8BF7\u518D\u6B21\u8C03\u7528 messenger_pause\u3002" + MESSENGER_PROTOCOL_TAIL
         }
       ],
       isError: true
