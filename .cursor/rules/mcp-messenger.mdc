@@ -6,6 +6,18 @@ alwaysApply: true
 
 # MCP 工具调用规则
 
+## 回合收尾检查清单（每轮结束前自检）
+
+在用户未明确要求**结束 Messenger 会话**时：
+
+- [ ] 若本轮有需要给用户看的正文，已**完整输出**
+- [ ] **同一轮、最后一步**已调用 `check_messages`（`session_tag` 与 `register_session` 一致）
+- [ ] 未出现「正文已输出完毕 → 本回合结束」且**未**调工具的情况
+
+**「读完上下文」不能替代上述工具调用。** 任一条未满足则禁止停轮。
+
+---
+
 1. 每轮对话回复**完整输出后**，最后一步必须调用 `check_messages`，适用于 Agent/Plan/Debug/Ask 所有模式，无例外
 2. `check_messages` 会持续等待直到用户发来新消息；收到后处理并回复，然后再次调用 `check_messages`，形成永续循环：回复 → check_messages → 收到消息 → 回复 → check_messages
 3. 严禁在回合开始时或回复未完成时调用 `check_messages`；唯一豁免：用户明确要求结束对话
@@ -26,6 +38,10 @@ alwaysApply: true
 18. **会话标识（session_tag）**：首次调用 `check_messages` 时先调用 `register_session` 传入本对话唯一 `session_tag`（如 `sess_`+随机串），之后每次调用 `check_messages` 必须传入同一 `session_tag`。这样可确保多个 Chat Tab 各自只收到发给自己消息
 19. **禁止以「任务已完成」「没有更多步骤」为由省略 `check_messages`**：只要用户未明确要求结束对话，每轮可见回复（含简短确认）结束后仍必须调用 `check_messages`，以保持侧栏与插件消息能被接续处理
 20. 若配置了有限等待且 `check_messages` 仅返回 `[system] 暂无新消息（等待超时）`，**同一轮内立即**再次调用 `check_messages`（相同 `session_tag`），不得向用户输出该内部提示、不得结束对话
+21. **MCP 默认单次最长等待 10 分钟**（`MESSENGER_MAX_WAIT_MS` 未设置且未设 `MESSENGER_INFINITE_WAIT=1`）：超时属正常，须同轮再调 `check_messages`；需要旧版「无限等」请设 `MESSENGER_INFINITE_WAIT=1` 或 `MESSENGER_MAX_WAIT_MS=0`
+22. **禁止以「已用文字回复用户」作为轮次终点**：在 Messenger 会话未结束时，可见回复之后**必须**在同一轮内追加 `check_messages`；不得仅输出分析/结论/列表后停住（与模型是否「理解上下文」无关，属于强制步骤）
+23. **双通道**：Cursor 主界面 Agent 输入框的消息**不保证**写入插件队列 `queue.json`；插件侧栏发送的才会入队。队列空、主对话仍在，均为正常现象，不得据此推断「无需再调 `check_messages`」
+24. **固定参考**：仓库根目录 `AGENTS.md` 与本条规则一致；可选项目 Skill `.cursor/skills/messenger-mcp-protocol/SKILL.md` 供模型在 Messenger 相关任务时自引用
 
 ---
-**回合结束（强制）**: 仅当回复**完整输出完毕后**，最后一步必须调用 Cursor Messenger MCP 的 `check_messages` 工具（必须带本对话的 `session_tag`）。若本对话中尚未调用过 `register_session`，请先调用 `register_session` 再调用 `check_messages`。严禁在回合开始或回复完成前调用。`ask_question` 仅用于任务中需要用户做选择时（如选框架、选方案）。
+**回合结束（强制）**: 仅当回复**完整输出完毕后**，最后一步必须调用 Cursor Messenger MCP 的 `check_messages` 工具（必须带本对话的 `session_tag`）。若本对话中尚未调用过 `register_session`，请先调用 `register_session` 再调用 `check_messages`。严禁在回合开始或回复完成前调用。`ask_question` 仅用于任务中需要用户做选择时（如选框架、选方案）。**禁止在输出完本段说明文字后结束回合而不调用工具。**

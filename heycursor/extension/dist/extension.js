@@ -1935,6 +1935,23 @@ function activate(context) {
   });
   startPolling();
   autoSetupMcp(folders);
+  let keepaliveTimer = null;
+  const keepaliveMs = Number(process.env.HEYCURSOR_KEEPALIVE_MS);
+  if (Number.isFinite(keepaliveMs) && keepaliveMs >= 6e4) {
+    keepaliveTimer = setInterval(() => {
+      try {
+        const fp = path3.join(getDataDir(), "current_session.json");
+        if (!fs3.existsSync(fp))
+          return;
+        const o = JSON.parse(fs3.readFileSync(fp, "utf8"));
+        const tag = o?.session_tag;
+        if (typeof tag !== "string" || !tag)
+          return;
+        sendText(`[KEEPALIVE] ${(/* @__PURE__ */ new Date()).toISOString()}`, tag);
+      } catch {
+      }
+    }, keepaliveMs);
+  }
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders((event) => {
       const next = vscode.workspace.workspaceFolders ?? [];
@@ -1956,6 +1973,8 @@ function activate(context) {
   );
   context.subscriptions.push({
     dispose: () => {
+      if (keepaliveTimer)
+        clearInterval(keepaliveTimer);
       if (pollTimer2)
         clearInterval(pollTimer2);
     }
