@@ -200,6 +200,35 @@ function writeSessionLabels(labels) {
   ensureDir();
   fs.writeFileSync(path.join(getDataDir(), "session_labels.json"), JSON.stringify(labels, null, 2), "utf-8");
 }
+function writeKnownSessionsList(list) {
+  ensureDir();
+  fs.writeFileSync(path.join(getDataDir(), "known_sessions.json"), JSON.stringify(Array.isArray(list) ? list : [], null, 2), "utf-8");
+}
+function deleteSavedSession(sessionId) {
+  if (typeof sessionId !== "string" || !sessionId)
+    return false;
+  let changed = false;
+  const labels = readSessionLabels();
+  if (Object.prototype.hasOwnProperty.call(labels, sessionId)) {
+    delete labels[sessionId];
+    writeSessionLabels(labels);
+    changed = true;
+  }
+  const known = readKnownSessionsList();
+  const nextKnown = known.filter((item) => item && item.session_tag !== sessionId);
+  if (nextKnown.length !== known.length) {
+    writeKnownSessionsList(nextKnown);
+    changed = true;
+  }
+  if (getManualSessionOverrideTag() === sessionId) {
+    try {
+      fs.unlinkSync(manualSessionTargetFile());
+    } catch {
+    }
+    changed = true;
+  }
+  return changed;
+}
 function summarizeSessionLabelText(text) {
   if (typeof text !== "string")
     return "";
@@ -2001,6 +2030,17 @@ var MessengerViewProvider = class {
             mainPanel.webview.postMessage(sm2);
           }
           break;
+        case "deleteSessionSaved":
+          if (typeof msg.session_tag === "string" && msg.session_tag) {
+            deleteSavedSession(msg.session_tag);
+            lastSessionStateJson = "";
+            if (mainPanel) {
+              const sm3 = buildSessionStateMessage();
+              lastSessionStateJson = JSON.stringify(sm3);
+              mainPanel.webview.postMessage(sm3);
+            }
+          }
+          break;
       }
     });
     webviewView.onDidDispose(() => {
@@ -2145,6 +2185,69 @@ var MessengerViewProvider = class {
     const styleUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this.extensionUri, "dist", "webview.css")
     );
+    const bootstrapScript = `<script>
+  (function() {
+    const originalAcquire = typeof acquireVsCodeApi === "function" ? acquireVsCodeApi : null;
+    let cachedApi = null;
+    if (originalAcquire) {
+      window.acquireVsCodeApi = function() {
+        if (!cachedApi)
+          cachedApi = originalAcquire();
+        return cachedApi;
+      };
+    }
+  })();
+  </script>`;
+    const sessionDeleteScript = `<script>
+  (function() {
+    let sessionState = { targetMode: "follow", aiSession: null, activeSession: null };
+    function getApi() {
+      return typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : null;
+    }
+    function resolveSessionTag() {
+      return sessionState.targetMode === "fixed" ? sessionState.activeSession : sessionState.aiSession;
+    }
+    function ensureDeleteButton() {
+      const row = document.querySelector(".session-rename-row");
+      if (!row)
+        return;
+      let btn = row.querySelector(".session-delete-btn");
+      if (!btn) {
+        btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "session-rename-btn session-delete-btn";
+        btn.title = "删除当前会话保存项";
+        btn.textContent = "🗑";
+        btn.addEventListener("click", function() {
+          const api = getApi();
+          const sessionTag = resolveSessionTag();
+          if (!api || !sessionTag)
+            return;
+          api.postMessage({ type: "deleteSessionSaved", session_tag: sessionTag });
+        });
+        row.appendChild(btn);
+      }
+    }
+    window.addEventListener("message", function(ev) {
+      const data = ev.data;
+      if (!data || data.type !== "sessionState")
+        return;
+      sessionState = {
+        targetMode: data.targetMode === "fixed" ? "fixed" : "follow",
+        aiSession: data.aiSession || null,
+        activeSession: data.activeSession || null
+      };
+      setTimeout(ensureDeleteButton, 0);
+    });
+    const observer = new MutationObserver(function() {
+      ensureDeleteButton();
+    });
+    window.addEventListener("load", function() {
+      ensureDeleteButton();
+      observer.observe(document.body, { childList: true, subtree: true });
+    });
+  })();
+  </script>`;
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -2154,7 +2257,9 @@ var MessengerViewProvider = class {
 </head>
 <body>
   <div id="root"></div>
+  ${bootstrapScript}
   <script src="${scriptUri}"></script>
+  ${sessionDeleteScript}
 </body>
 </html>`;
   }

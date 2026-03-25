@@ -150,6 +150,12 @@ body {
   cursor: pointer;
   border-radius: 4px;
 }
+.session-delete-btn {
+  min-width: 34px;
+  padding: 6px 8px;
+  font-size: 1em;
+  line-height: 1;
+}
 .buttons {
   display: flex;
   gap: 8px;
