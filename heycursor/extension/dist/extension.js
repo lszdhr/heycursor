@@ -1234,7 +1234,7 @@ function officialUsagePercentFromRaw(raw) {
     total = used / limit * 100;
   if (total == null || !Number.isFinite(total))
     return null;
-  return Math.min(100, Math.max(0, Math.round(total)));
+  return Math.max(0, Math.round(total));
 }
 function extractBillingCycleValue(raw, keys) {
   if (!raw || typeof raw !== "object")
@@ -1255,7 +1255,7 @@ function buildAutoQuotaFromRaw(raw) {
   if (!plan || typeof plan !== "object")
     return null;
   const autoUsedPct = pickNumberFromObj(plan, ["autoPercentUsed", "auto_percent_used"]);
-  const autoUsed = autoUsedPct == null ? null : Math.max(0, Math.min(100, autoUsedPct));
+  const autoUsed = autoUsedPct == null ? null : Math.max(0, +autoUsedPct);
   const apiUsedPct = pickNumberFromObj(plan, ["apiPercentUsed", "api_percent_used"]);
   const planUsed = pickNumberFromObj(plan, ["used", "totalSpend", "total_spend"]);
   const planLimit = pickNumberFromObj(plan, ["limit"]);
@@ -1267,9 +1267,12 @@ function buildAutoQuotaFromRaw(raw) {
   if (autoUsed != null)
     detailParts.push(`Auto + Composer 已用 ${autoUsed.toFixed(1)}%`);
   if (apiUsedPct != null)
-    detailParts.push(`API 已用 ${Math.max(0, Math.min(100, apiUsedPct)).toFixed(1)}%`);
-  if (planUsed != null && planLimit != null && planLimit > 0)
+    detailParts.push(`API 已用 ${Math.max(0, +apiUsedPct).toFixed(1)}%`);
+  if (planUsed != null && planLimit != null && planLimit > 0) {
     detailParts.push(`Plan ${formatUsdFromCents(planUsed)} / ${formatUsdFromCents(planLimit)}`);
+    if (planUsed > planLimit)
+      detailParts.push(`Plan 超额 ${formatUsdFromCents(planUsed - planLimit)}`);
+  }
   if (onDemandEnabled === true || onDemandUsed != null || onDemandLimit != null) {
     if (onDemandUsed != null && onDemandLimit != null)
       detailParts.push(`On-Demand ${formatUsdFromCents(onDemandUsed)} / ${formatUsdFromCents(onDemandLimit)}`);
@@ -1278,7 +1281,7 @@ function buildAutoQuotaFromRaw(raw) {
   }
   if (detailParts.length === 0)
     return null;
-  const remaining = autoUsed == null ? null : Math.max(0, +(100 - autoUsed).toFixed(1));
+  const remaining = autoUsed == null ? null : +(100 - autoUsed).toFixed(1);
   return {
     used: autoUsed == null ? null : +autoUsed.toFixed(1),
     limit: 100,
