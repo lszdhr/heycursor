@@ -341,6 +341,18 @@ function enqueueKeepalive(sessionId, source = "extension-idle-guard") {
 function buildRecoveryQuery(sessionId) {
   return `请继续调用 Cursor Messenger MCP 的 check_messages 工具恢复监听，session_tag: "${sessionId}"。如果会话仍需继续，请不要向用户解释内部状态，直接恢复监听。`;
 }
+function buildPerMessageProtocolNote(sessionId) {
+  const sid = typeof sessionId === "string" && sessionId.trim() ? sessionId.trim() : "当前会话";
+  return `\n\n[protocol]\n本轮处理完后必须继续调用 check_messages(session_tag=\"${sid}\") 保持监听。除非用户明确要求结束，否则不要停止监听。\n[/protocol]`;
+}
+function appendProtocolNote(text, sessionId) {
+  const base = typeof text === "string" ? text : "";
+  if (!base.trim())
+    return base;
+  if (base.includes("[protocol]") && base.includes("check_messages("))
+    return base;
+  return `${base}${buildPerMessageProtocolNote(sessionId)}`;
+}
 function extractOldestPendingUserMessage(sessionId) {
   const items = readQueueRaw(sessionId).filter((item) => item && item.type !== "keepalive");
   if (items.length === 0)
@@ -422,10 +434,11 @@ async function maybePromptRecovery(sessionId) {
 }
 function sendText(text, sessionId) {
   const queue = readQueueRaw();
+  const content = appendProtocolNote(text, sessionId);
   const item = {
     id: makeId(),
     type: "text",
-    content: text,
+    content,
     timestamp: (/* @__PURE__ */ new Date()).toISOString()
   };
   if (sessionId)
@@ -1043,11 +1056,17 @@ function readVscdbViaSqlite(dbPath) {
       const { DatabaseSync } = require("node:sqlite");
       const db = new DatabaseSync(dbPath, { readOnly: true });
       const tokenRow = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/accessToken");
+      const refreshRow = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/refreshToken");
       const emailRow = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/cachedEmail");
       const memRow = db.prepare("SELECT value FROM ItemTable WHERE key = ?").get("cursorAuth/stripeMembershipType");
       db.close();
       if (tokenRow?.value) {
-        return { token: tokenRow.value, email: emailRow?.value || "", membershipType: memRow?.value || "" };
+        return {
+          token: tokenRow.value,
+          refreshToken: refreshRow?.value || "",
+          email: emailRow?.value || "",
+          membershipType: memRow?.value || ""
+        };
       }
       break;
     } catch {
@@ -1056,7 +1075,7 @@ function readVscdbViaSqlite(dbPath) {
   try {
     const { execSync } = require("child_process");
     const escaped = dbPath.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-    const script = `const{DatabaseSync}=require("node:sqlite");const db=new DatabaseSync('${escaped}',{readOnly:true});const t=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/accessToken");const e=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/cachedEmail");const m=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/stripeMembershipType");db.close();console.log(JSON.stringify({t:t?.value||"",e:e?.value||"",m:m?.value||""}))`;
+    const script = `const{DatabaseSync}=require("node:sqlite");const db=new DatabaseSync('${escaped}',{readOnly:true});const t=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/accessToken");const r=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/refreshToken");const e=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/cachedEmail");const m=db.prepare("SELECT value FROM ItemTable WHERE key=?").get("cursorAuth/stripeMembershipType");db.close();console.log(JSON.stringify({t:t?.value||"",r:r?.value||"",e:e?.value||"",m:m?.value||""}))`;
     const out = execSync(`node --disable-warning=ExperimentalWarning -e "${script}"`, {
       encoding: "utf-8",
       timeout: 1e4,
@@ -1064,7 +1083,12 @@ function readVscdbViaSqlite(dbPath) {
     }).trim();
     const parsed = JSON.parse(out);
     if (parsed.t)
-      return { token: parsed.t, email: parsed.e || "", membershipType: parsed.m || "" };
+      return {
+        token: parsed.t,
+        refreshToken: parsed.r || "",
+        email: parsed.e || "",
+        membershipType: parsed.m || ""
+      };
   } catch {
   }
   return null;
@@ -1082,9 +1106,11 @@ function readCursorAuth() {
     try {
       const data = JSON.parse(fs2.readFileSync(jsonPath, "utf-8"));
       const token = data["cursorAuth/accessToken"];
+      const refreshToken = data["cursorAuth/refreshToken"];
       if (typeof token === "string") {
         return {
           token,
+          refreshToken: typeof refreshToken === "string" ? refreshToken : "",
           email: data["cursorAuth/cachedEmail"] || "",
           membershipType: data["cursorAuth/stripeMembershipType"] || ""
         };
@@ -1099,6 +1125,7 @@ function readCursorAuth() {
       if (data.token)
         return {
           token: data.token,
+          refreshToken: data.refreshToken || data.refresh_token || "",
           email: data.email || "",
           membershipType: data.membershipType || data.stripeMembershipType || ""
         };
@@ -1113,9 +1140,33 @@ function readInjectedToken() {
     return null;
   try {
     const data = JSON.parse(fs2.readFileSync(file, "utf-8"));
-    return data?.token ? { token: data.token } : null;
+    return data?.token ? { token: data.token, refreshToken: data.refreshToken || data.refresh_token || "" } : null;
   } catch {
     return null;
+  }
+}
+function persistRefreshedAuth(auth) {
+  if (!auth?.token)
+    return;
+  try {
+    const injectedPath = path2.join(getDataDir(), INJECTED_TOKEN_FILE);
+    const payload = auth.refreshToken ? { token: auth.token, refreshToken: auth.refreshToken } : { token: auth.token };
+    fs2.writeFileSync(injectedPath, JSON.stringify(payload, null, 2), "utf-8");
+  } catch {
+  }
+  try {
+    const gsDir = path2.join(getCursorConfigDir(), "User", "globalStorage");
+    const authPath = path2.join(gsDir, "cursor.auth.json");
+    const prev = fs2.existsSync(authPath) ? JSON.parse(fs2.readFileSync(authPath, "utf-8")) : {};
+    const merged = {
+      ...prev,
+      token: auth.token,
+      refreshToken: auth.refreshToken || prev?.refreshToken || prev?.refresh_token || "",
+      email: auth.email || prev?.email || "",
+      membershipType: auth.membershipType || prev?.membershipType || prev?.stripeMembershipType || ""
+    };
+    fs2.writeFileSync(authPath, JSON.stringify(merged, null, 2), "utf-8");
+  } catch {
   }
 }
 function readCursorSidecarEmailMembership() {
@@ -1415,6 +1466,62 @@ function fetchUsageSummaryOfficial(accessToken) {
       req.destroy();
       reject(new Error("timeout"));
     });
+    req.end();
+  });
+}
+function refreshAccessTokenOfficial(refreshToken) {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    });
+    const req = https.request(
+      {
+        hostname: "api2.cursor.sh",
+        port: 443,
+        path: "/oauth/token",
+        method: "POST",
+        agent: false,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+        },
+        timeout: 2e4
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => {
+          data += chunk.toString();
+        });
+        res.on("end", () => {
+          const code = res.statusCode || 0;
+          if (code !== 200) {
+            reject(new Error(`REFRESH_HTTP_${code}`));
+            return;
+          }
+          try {
+            const parsed = data ? JSON.parse(data) : {};
+            const accessToken = parsed.access_token || parsed.accessToken || "";
+            const nextRefresh = parsed.refresh_token || parsed.refreshToken || refreshToken;
+            if (!accessToken) {
+              reject(new Error("REFRESH_NO_TOKEN"));
+              return;
+            }
+            resolve({ accessToken, refreshToken: nextRefresh });
+          } catch {
+            reject(new Error("REFRESH_JSON"));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
+    req.write(payload);
     req.end();
   });
 }
