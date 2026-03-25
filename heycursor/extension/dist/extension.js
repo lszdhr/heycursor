@@ -244,6 +244,9 @@ function sessionsForWebviewDropdown() {
   return out;
 }
 var lastSessionStateJson = "";
+var lastSessionIntentAt = /* @__PURE__ */ new Map();
+var lastSessionHeartbeatAt = /* @__PURE__ */ new Map();
+var ACTIVE_TYPING_GRACE_MS = 9e4;
 function buildSessionStateMessage() {
   return {
     type: "sessionState",
@@ -252,6 +255,29 @@ function buildSessionStateMessage() {
     activeSession: getCurrentSessionId(),
     sessions: sessionsForWebviewDropdown()
   };
+}
+function markSessionIntent(sessionId, active = true) {
+  if (!sessionId)
+    return;
+  if (active)
+    lastSessionIntentAt.set(sessionId, Date.now());
+  else
+    lastSessionIntentAt.delete(sessionId);
+}
+function noteHeartbeatSent(sessionId) {
+  if (!sessionId)
+    return;
+  lastSessionHeartbeatAt.set(sessionId, Date.now());
+}
+function shouldSendKeepalive(sessionId, keepaliveMs) {
+  if (!sessionId || !Number.isFinite(keepaliveMs) || keepaliveMs <= 0)
+    return false;
+  const now = Date.now();
+  const lastIntentAt = lastSessionIntentAt.get(sessionId) || 0;
+  if (lastIntentAt > 0 && now - lastIntentAt < ACTIVE_TYPING_GRACE_MS)
+    return false;
+  const lastHeartbeatAt = lastSessionHeartbeatAt.get(sessionId) || 0;
+  return lastHeartbeatAt <= 0 || now - lastHeartbeatAt >= keepaliveMs;
 }
 function sendText(text, sessionId) {
   const queue = readQueue();
@@ -265,6 +291,7 @@ function sendText(text, sessionId) {
     item.session_id = sessionId;
   queue.push(item);
   writeQueue(queue);
+  markSessionIntent(sessionId, true);
   maybeAutoLabelSession(sessionId, text);
 }
 function sendImage(filePath, caption, sessionId) {
@@ -280,6 +307,7 @@ function sendImage(filePath, caption, sessionId) {
     item.session_id = sessionId;
   queue.push(item);
   writeQueue(queue);
+  markSessionIntent(sessionId, true);
   maybeAutoLabelSession(sessionId, caption || autoLabelFromFilePath(filePath) || "图片消息");
 }
 function queueImageFromDataUrl(dataUrl, caption, sessionId) {
@@ -312,6 +340,7 @@ function sendFile(filePath, suffix, sessionId) {
     item.session_id = sessionId;
   queue.push(item);
   writeQueue(queue);
+  markSessionIntent(sessionId, true);
   maybeAutoLabelSession(sessionId, autoLabelFromFilePath(filePath) || suffix || "文件消息");
 }
 function getQueueCount(sessionId) {
@@ -1305,7 +1334,8 @@ function getMcpServerPath() {
   const extDir = path3.dirname(path3.dirname(__filename));
   return path3.join(extDir, "dist", "mcp-server.mjs");
 }
-var DEFAULT_HEYCURSOR_KEEPALIVE_MS = 900000;
+var DEFAULT_HEYCURSOR_KEEPALIVE_MS = 3e5;
+var KEEPALIVE_TICK_MS = 3e4;
 function buildMessengerMcpEnv(dataDir, prevEnv) {
   const env = typeof prevEnv === "object" && prevEnv !== null ? { ...prevEnv } : {};
   env.MESSENGER_DATA_DIR = dataDir;
@@ -1576,6 +1606,10 @@ var MessengerViewProvider = class {
             input: msg.input ?? "",
             history: msg.history ?? []
           });
+          markSessionIntent(getCurrentSessionId(), typeof msg.input === "string" && msg.input.trim().length > 0);
+          break;
+        case "typingActivity":
+          markSessionIntent(getCurrentSessionId(), msg.active !== false);
           break;
         case "sendText":
           if (msg.text != null) {
@@ -1936,10 +1970,13 @@ function activate(context) {
         const tag = o?.session_tag;
         if (typeof tag !== "string" || !tag)
           return;
+        if (!shouldSendKeepalive(tag, keepaliveMs))
+          return;
         sendText(`[KEEPALIVE] ${(/* @__PURE__ */ new Date()).toISOString()}`, tag);
+        noteHeartbeatSent(tag);
       } catch {
       }
-    }, keepaliveMs);
+    }, KEEPALIVE_TICK_MS);
   }
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders((event) => {

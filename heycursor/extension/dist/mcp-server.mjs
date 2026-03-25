@@ -15734,7 +15734,7 @@ var BaseMetadataSchema = object2({
   /** Intended for programmatic or logical use, but used as a display name in past specs or fallback */
   name: string2(),
   /**
-   * Intended for UI and end-user contexts — optimized to be human-readable and easily understood,
+   * Intended for UI and end-user contexts - optimized to be human-readable and easily understood,
    * even by those unfamiliar with domain-specific terminology.
    *
    * If not provided, the name should be used for display (except for Tool,
@@ -21219,6 +21219,34 @@ async function processMessage(msg) {
       return { type: "text", text: `[\u672A\u77E5\u6D88\u606F\u7C7B\u578B: ${msg.type}]` };
   }
 }
+function summarizeQueuedMessage(msg) {
+  if (!msg || typeof msg !== "object")
+    return "unknown";
+  const kind = typeof msg.type === "string" && msg.type ? msg.type : "unknown";
+  const id = typeof msg.id === "string" && msg.id ? msg.id : "no-id";
+  if (kind === "text") {
+    const text = typeof msg.content === "string" ? msg.content.replace(/\s+/g, " ").trim() : "";
+    const preview = text.length > 60 ? `${text.slice(0, 60)}...` : text;
+    return `${kind}:${id}:${preview || "<empty>"}`;
+  }
+  if (kind === "image") {
+    const name = typeof msg.path === "string" && msg.path ? path.basename(msg.path) : "unknown";
+    const caption = typeof msg.caption === "string" && msg.caption.trim() ? msg.caption.replace(/\s+/g, " ").trim() : "";
+    return `${kind}:${id}:${name}${caption ? `:${caption.slice(0, 40)}` : ""}`;
+  }
+  if (kind === "file") {
+    const name = typeof msg.path === "string" && msg.path ? path.basename(msg.path) : "unknown";
+    return `${kind}:${id}:${name}`;
+  }
+  return `${kind}:${id}`;
+}
+function formatQueueDeliveryLog(queue, session_tag, waitStart) {
+  const waitedMs = Math.max(0, Date.now() - waitStart);
+  const preview = queue.slice(0, 3).map((msg) => summarizeQueuedMessage(msg)).join(" | ");
+  const more = queue.length > 3 ? ` | +${queue.length - 3} more` : "";
+  const sessionPart = session_tag ? ` session_tag=${session_tag}` : "";
+  return `check_messages delivered ${queue.length} queued item(s)${sessionPart} after ${waitedMs}ms at ${(/* @__PURE__ */ new Date()).toISOString()}${preview ? ` :: ${preview}${more}` : ""}`;
+}
 async function appendServerLog(level, message) {
   try {
     await ensureDataDir();
@@ -21474,7 +21502,7 @@ server.tool(
         } else {
           results.push({ type: "text", text: SYSTEM_SUFFIX });
         }
-        await appendServerLog("info", `check_messages delivered ${queue.length} queued item(s)`);
+        await appendServerLog("info", formatQueueDeliveryLog(queue, session_tag, waitStart));
         return { content: results };
       }
       if (Number.isFinite(MAX_WAIT_MS) && Date.now() - waitStart >= MAX_WAIT_MS) {
