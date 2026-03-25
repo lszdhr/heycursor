@@ -1558,6 +1558,43 @@ async function fetchCursorUsage() {
     };
   } catch (e) {
     let error = e instanceof Error ? e.message : "\u67E5\u8BE2\u5931\u8D25";
+    if (error === "OFFICIAL_AUTH" && auth?.refreshToken) {
+      try {
+        const refreshed = await refreshAccessTokenOfficial(auth.refreshToken);
+        const nextAuth = {
+          ...auth,
+          token: refreshed.accessToken,
+          refreshToken: refreshed.refreshToken || auth.refreshToken
+        };
+        persistRefreshedAuth(nextAuth);
+        const [raw, metaResult, stripeResult] = await Promise.all([
+          fetchUsageSummaryOfficial(nextAuth.token),
+          fetchUserMetaOfficial(nextAuth.token).catch(() => null),
+          fetchStripeProfileOfficial(nextAuth.token).catch(() => null)
+        ]);
+        const plan = getUsagePlan(raw);
+        const usagePct = officialUsagePercentFromRaw(raw);
+        const rawMembership = typeof raw?.membershipType === "string" ? raw.membershipType : null;
+        const membershipType = resolveMembershipFromStripeProfile(stripeResult) || rawMembership || nextAuth.membershipType || "-";
+        const email = pickStringFromObj(metaResult, ["email"]) || nextAuth.email || "-";
+        const totalCostCents = pickNumberFromObj(plan, ["used", "totalSpend", "total_spend"]) ?? 0;
+        const includedReqs = Array.isArray(raw?.includedUsageEvents) ? raw.includedUsageEvents.length : 0;
+        const onDemandReqs = Array.isArray(raw?.spendLimitEvents) ? raw.spendLimitEvents.length : 0;
+        return {
+          success: true,
+          email,
+          membershipType,
+          usagePct: usagePct ?? null,
+          billingCycleStart: extractBillingCycleValue(raw, ["billingCycleStart", "billing_cycle_start", "start", "periodStart"]),
+          billingCycleEnd: extractBillingCycleValue(raw, ["billingCycleEnd", "billing_cycle_end", "end", "periodEnd"]),
+          totalCost: totalCostCents / 100,
+          eventsCount: includedReqs + onDemandReqs,
+          models: [],
+          autoQuota: buildAutoQuotaFromRaw(raw)
+        };
+      } catch {
+      }
+    }
     if (error === "NO_WORKOS_SUB")
       error = "Cursor access token \u7F3A\u5C11 WorkOS \u7528\u6237\u6807\u8BC6";
     else if (error === "OFFICIAL_AUTH")

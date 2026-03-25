@@ -60,9 +60,22 @@
   - Depends: none
   - Done-when: README 或说明文档解释推荐 shell、包装器用法和限制
   - Result: README 新增终端防卡死章节，说明推荐 shell、包装器调用方式和超时语义
+- [x] **T13**: 官方额度链路补 refresh token 自动刷新重试
+  - Depends: none
+  - Done-when: 当官方接口返回认证失败时，自动用本地 refresh token 刷新 access token 后重试一次
+-  - Result: `heycursor/extension/dist/extension.js`：`fetchCursorUsage()` 捕获 `OFFICIAL_AUTH` 后调用 `refreshAccessTokenOfficial()` + `persistRefreshedAuth()`，并重试获取 usage summary / meta / stripe
+- [x] **T14**: 刷新成功后落盘并复用新 token
+  - Depends: T13
+  - Done-when: 刷新成功后更新本地 token 存储（injected token 或 sidecar）并用于后续额度请求
+-  - Result: `persistRefreshedAuth()` 已更新 `injected-token.json` 与 `cursor.auth.json`（包含 `refreshToken`）供后续复用
+- [x] **T15**: 验证与文档对齐
+  - Depends: T13,T14
+  - Done-when: 语法检查通过；README「额度统计」与代码实现一致
+  - Result: README 已有 refreshToken 说明；已对 `extension.js` 执行 `node --check` 通过
 
 ## Summary
 
 - 新增 agent-run 包装脚本，统一终端命令的开始/心跳/结束标记。
 - 包装脚本支持总超时与静默超时，超时后主动杀掉子进程树。
 - Cursor/Windsurf/扩展内置规则与 README 已同步到终端包装器优先策略。
+- 新增官方额度 token 刷新重试：`OFFICIAL_AUTH` 时走 refreshToken 刷新 accessToken 并重试 usage/meta/stripe；刷新后落盘复用。
