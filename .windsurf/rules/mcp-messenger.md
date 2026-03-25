@@ -48,6 +48,7 @@ trigger: always
 28. **`messenger_pause`**：需要用户显式点击「继续」再往下执行时调用（例如等待人工操作）；与 `ask_question` 同为阻塞等待（心跳、有限超时须同轮重试）。会话未结束时，完成后仍须 `check_messages`
 29. **`propose_session_tag` 与 `register_session(..., label)`**：`propose_session_tag` 生成可读 `session_tag` 建议（`sess_<词>_<hex>`）；`register_session` 可选 `label`（人类可读短标签），便于侧栏与 `recall_sessions` 识别
 30. **规则同步**：维护协议时须同时更新 `heycursor/extension/dist/mcp-messenger-bundled.mdc`（扩展内置）与 `.cursor/rules/mcp-messenger.mdc`，保持二者内容一致
+31. **保活机制说明时的主对话正文**：当用户询问或你需说明 Messenger **保活与监听机制**（含 `MESSENGER_SLICE_WAIT_MS` 切片、结构化 `keepalive`、`session_activity.json`、疑似断链与恢复、`MESSENGER_MAX_WAIT_MS` 等）时，除 `check_messages` 的 `reply` 摘要外，须在 **主对话中写一段简短可见说明**（几句话说清各层分工即可），不得仅依赖侧栏摘要让用户以为「主对话没回」
 
 ---
 **回合结束（强制）**: 仅当回复**完整输出完毕后**，最后一步必须调用 Windsurf Messenger MCP 的 `check_messages` 工具（必须带本对话的 `session_tag`）。若本对话中尚未调用过 `register_session`，请先调用 `register_session` 再调用 `check_messages`。严禁在回合开始或回复完成前调用。`ask_question` 仅用于任务中需要用户做选择时（如选框架、选方案）。**禁止在输出完本段说明文字后结束回合而不调用工具。**
