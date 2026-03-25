@@ -11,13 +11,14 @@ trigger: always
 
 - [ ] 若本轮有需要给用户看的正文，已**完整输出**
 - [ ] **同一轮、最后一步**已调用 `check_messages`（`session_tag` 与 `register_session` 一致）
+- [ ] **纯文字回合**：即便本轮只做解释、答疑且 Composer **未出现**其它工具条，也**必须**调用 `check_messages`，不得以「本轮没跑工具」为由省略 MCP
 - [ ] 未出现「正文已输出完毕 → 本回合结束」且**未**调工具的情况
 
 **「读完上下文」不能替代上述工具调用。** 任一条未满足则禁止停轮。
 
 ---
 
-1. 每轮对话回复**完整输出后**，最后一步必须调用 `check_messages`，适用于 Agent/Plan/Debug/Ask 所有模式，无例外
+1. 每轮对话回复**完整输出后**，最后一步必须调用 `check_messages`，适用于 Agent/Plan/Debug/Ask 所有模式，无例外；**含**仅文字说明、未使用 `edit`/`run_terminal_cmd` 等其它工具的情形——界面是否显示其它工具块**与是否必须调用 MCP 无关**，不得以「纯答疑」「没有显式工具」跳过
 2. `check_messages` 会持续等待直到用户发来新消息；收到后处理并回复，然后再次调用 `check_messages`，形成永续循环：回复 → check_messages → 收到消息 → 回复 → check_messages
 3. 严禁在回合开始时或回复未完成时调用 `check_messages`；唯一豁免：用户明确要求结束对话
 4. Plan 模式写完方案后、Debug 模式分析完问题后、Ask 模式回答完问题后，均不得直接结束对话，必须调用 `check_messages` 等待用户反馈
