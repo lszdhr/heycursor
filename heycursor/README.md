@@ -25,9 +25,9 @@ node tools/patch-extension-id.cjs
 
 读取本机 `state.vscdb` / 注入 token 后：
 
-1. **优先**官方 `GET https://cursor.com/api/usage-summary`（`WorkosCursorSessionToken` Cookie，学自 cockpit-tools）
-2. **失败则回退**第三方代理 `POST {MCP_API_BASE}/subscriptions/local-token-info`（默认 `MCP_API_BASE=https://api.yidachuang.top/api`；可自建并改环境变量）
-3. `HEYCURSOR_QUOTA_PROXY_ONLY=1` 时跳过官方、只走代理
+1. **优先**官方 `GET https://cursor.com/api/usage-summary`
+2. 再读取 `https://api2.cursor.sh/aiserver.v1.AuthService/GetUserMeta`、`https://api2.cursor.sh/auth/full_stripe_profile`、`https://api2.cursor.sh/auth/stripe_profile` 补齐套餐、账单周期与用户信息
+3. 若官方会话过期，则自动用本地 `refreshToken` 请求 `https://api2.cursor.sh/oauth/token` 刷新 `accessToken` 后重试
 
 ## MCP 服务端：长等待与协议提醒（借鉴 CueStack HAP）
 
@@ -37,7 +37,7 @@ node tools/patch-extension-id.cjs
 |----------|------|
 | （默认） | **未设置** `MESSENGER_MAX_WAIT_MS` 时，服务端 **无限期** 阻塞等待，适合「一早挂上 MCP、整天不讲话也尽量不断」 |
 | `MESSENGER_MAX_WAIT_MS` | 设为有限毫秒数时，单次 `check_messages` / `ask_question` / `messenger_pause` 最长等待该时长，超时返回系统提示后须**同轮再次**调用 |
-| `MESSENGER_SLICE_WAIT_MS` | **默认 `120000`**：`check_messages` 在无新消息时每隔该时长返回一次**内部切片**（非用户消息），模型须**同轮再调** `check_messages`，以降低单次工具调用挂死时间、利于保活。设为 `0` / `off` / `false` 可关闭切片（恢复单次调用内长等）。与 `MESSENGER_MAX_WAIT_MS` 同时存在时，**先达到**较短者生效 |
+| `MESSENGER_SLICE_WAIT_MS` | **默认 `300000`（约 5 分钟）**：`check_messages` 在无新消息时每隔该时长返回一次**内部切片**（非用户消息），模型须**同轮再调** `check_messages`，以降低单次工具调用挂死时间、利于保活。设为 `0` / `off` / `false` 可关闭切片（恢复单次调用内长等）。与 `MESSENGER_MAX_WAIT_MS` 同时存在时，**先达到**较短者生效 |
 | `MESSENGER_FINITE_DEFAULT_MS` | 在未设置 `MESSENGER_MAX_WAIT_MS` 时仍希望有默认上限时使用（一般不必） |
 | `MESSENGER_POLL_INTERVAL_MS` | 轮询队列间隔（毫秒），默认 `100` |
 | `MESSENGER_HEARTBEAT_INTERVAL_MS` | 向客户端发 logging heartbeat 间隔，默认 `8000` |
@@ -50,14 +50,14 @@ node tools/patch-extension-id.cjs
 
 ## 扩展内无感保活（默认开启）
 
-扩展进程会按 **`current_session.json`** 里的 `session_tag`，默认 **每 15 分钟** 向队列写入一条 **`[KEEPALIVE]…`**（不依赖外部脚本），用于在长时间无人说话时仍周期性唤醒 `check_messages` 循环，减轻部分环境下 MCP/长阻塞被闲置回收的概率。
+扩展进程会按 **`current_session.json`** 里的 `session_tag`，在会话空闲 **5 分钟**后向队列写入一条结构化 **`type: "keepalive"`** 静默项，而不是用户可见的 `[KEEPALIVE]` 文本。若用户仍在 HeyCursor 输入框里编辑，则会跳过本次保活。该机制用于在长时间无人说话时周期性唤醒 `check_messages` 循环，降低部分环境下 MCP / 长阻塞被闲置回收的概率。
 
 | 环境变量 | 作用 |
 |----------|------|
-| （默认） | **15 分钟**（`900000` ms）一条 `[KEEPALIVE]` |
-| `HEYCURSOR_KEEPALIVE_MS` | 自定义间隔（毫秒，≥`60000` 生效）；设为 **`0`** / **`off`** / **`false`** / **`no`** 可**关闭**保活 |
+| （默认） | **5 分钟**（`300000` ms）空闲后注入一条结构化 `keepalive` 静默项 |
+| `HEYCURSOR_KEEPALIVE_MS` | 自定义空闲保活阈值（毫秒，≥`60000` 生效）；设为 **`0`** / **`off`** / **`false`** / **`no`** 可**关闭**保活 |
 
-说明：能否「从早挂到晚」仍取决于 **Cursor 是否关闭、电脑是否休眠、网络/进程是否被系统杀掉**；保活只是降低闲置断连概率，**不能**违背客户端或操作系统的生命周期。
+说明：能否「从早挂到晚」仍取决于 **Cursor 是否关闭、电脑是否休眠、网络 / 进程是否被系统杀掉**；保活只是降低闲置断连概率，**不能**违背客户端或操作系统的生命周期。
 
 ## 打 VSIX
 

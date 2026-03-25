@@ -99,7 +99,10 @@ function readQueue(sessionId) {
 }
 function writeQueue(items) {
   ensureDir();
-  fs.writeFileSync(queueFile(), JSON.stringify(items, null, 2), "utf-8");
+  const file = queueFile();
+  const tmp = `${file}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(items, null, 2), "utf-8");
+  fs.renameSync(tmp, file);
 }
 function readSessionActivityMap() {
   ensureDir();
