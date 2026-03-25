@@ -50,6 +50,9 @@ alwaysApply: true
 29. **`propose_session_tag` 与 `register_session(..., label)`**：`propose_session_tag` 生成可读 `session_tag` 建议（`sess_<词>_<hex>`）；`register_session` 可选 `label`（人类可读短标签），便于侧栏与 `recall_sessions` 识别
 30. **规则同步**：维护协议时须同时更新 `heycursor/extension/dist/mcp-messenger-bundled.mdc`（扩展内置）与本 `.mdc`（仓库规则），保持二者内容一致
 31. **保活机制说明时的主对话正文**：当用户询问或你需说明 Messenger **保活与监听机制**（含 `MESSENGER_SLICE_WAIT_MS` 切片、结构化 `keepalive`、`session_activity.json`、疑似断链与恢复、`MESSENGER_MAX_WAIT_MS` 等）时，除 `check_messages` 的 `reply` 摘要外，须在 **Cursor 主对话 / Composer 中写一段简短可见说明**（几句话说清各层分工即可），不得仅依赖侧栏摘要让用户以为「主对话没回」
+32. **非必要不要直接裸跑终端命令**：优先通过仓库包装脚本 `scripts/agent-run.cmd` 或 `scripts/agent-run.ps1` 执行一次性检查、语法验证、打包等命令；能静态分析解决时，不要启用终端
+33. **终端命令必须可退出**：禁止运行 watch、dev server、交互确认、等待 stdin、无明确结束条件的命令。优先使用 `cmd` 或 `PowerShell -NoLogo -NoProfile` 这类干净 shell，避免 profile / prompt 噪音影响结束识别
+34. **包装器超时视为失败**：调用 `scripts/agent-run.*` 时必须设置合理 `-TimeoutSec` 与 `-IdleTimeoutSec`。若返回 `__AGENT_RUN_TIMEOUT__` 或 `__AGENT_RUN_IDLE_TIMEOUT__`，说明该命令不适合继续前台执行；应改用更短、更确定的命令，或改为文件分析，不得原样长时间重试
 
 ---
 

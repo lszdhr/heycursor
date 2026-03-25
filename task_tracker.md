@@ -48,9 +48,21 @@
   - Depends: T7,T8
   - Done-when: 语法检查通过、VSIX 重打包并完成中文提交
   - Result: 语法检查通过并重打包 heycursor-1.1.1.vsix，准备中文提交
+- [x] **T10**: 新增终端包装脚本
+  - Depends: none
+  - Done-when: 仓库新增统一的 agent 命令包装器，支持超时、静默超时、明确结束标记和退出码
+  - Result: 新增 scripts/agent-run.ps1 与 scripts/agent-run.cmd，支持开始/心跳/结束标记、超时和静默超时
+- [x] **T11**: 同步终端调用规则
+  - Depends: none
+  - Done-when: Cursor/Windsurf/扩展内置规则都要求优先使用包装脚本并避免直接裸跑终端
+  - Result: 同步 .cursor/.windsurf/扩展内置规则，要求优先使用 agent-run 包装脚本并避免裸跑终端
+- [x] **T12**: 补充终端防卡死说明
+  - Depends: none
+  - Done-when: README 或说明文档解释推荐 shell、包装器用法和限制
+  - Result: README 新增终端防卡死章节，说明推荐 shell、包装器调用方式和超时语义
 
 ## Summary
 
-- 新增 session_activity.json 作为扩展与 mcp-server 的共享活跃状态。
-- 扩展保活改为结构化 keepalive 包，不再以普通文本 [KEEPALIVE] 混入用户队列。
-- 当待处理消息滞留且 check_messages 轮询长期未更新时，扩展会提示疑似脱链并提供恢复监听/复制恢复指令。
+- 新增 agent-run 包装脚本，统一终端命令的开始/心跳/结束标记。
+- 包装脚本支持总超时与静默超时，超时后主动杀掉子进程树。
+- Cursor/Windsurf/扩展内置规则与 README 已同步到终端包装器优先策略。

@@ -59,6 +59,37 @@ node tools/patch-extension-id.cjs
 
 说明：能否「从早挂到晚」仍取决于 **Cursor 是否关闭、电脑是否休眠、网络 / 进程是否被系统杀掉**；保活只是降低闲置断连概率，**不能**违背客户端或操作系统的生命周期。
 
+## 终端防卡死建议
+
+如果需要让 Cursor / Composer 执行终端命令，建议优先使用更干净的 shell：
+
+- Windows 默认终端优先 `cmd`
+- 若必须用 PowerShell，优先 `PowerShell -NoLogo -NoProfile`
+
+仓库提供了统一包装脚本，避免直接裸跑终端命令：
+
+```powershell
+scripts\agent-run.cmd -TimeoutSec 60 -IdleTimeoutSec 15 -CommandLine "node --check heycursor\extension\dist\mcp-server.mjs"
+```
+
+```powershell
+powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\agent-run.ps1 -TimeoutSec 90 -IdleTimeoutSec 20 -CommandLine "git status --short"
+```
+
+包装脚本会：
+
+- 打印明确的开始、心跳、结束标记
+- 对无输出的命令按 `IdleTimeoutSec` 进行静默超时
+- 对整体执行时间按 `TimeoutSec` 做硬超时
+- 超时后主动杀掉子进程树并返回非零退出码
+
+推荐做法：
+
+- 非必要不要让 Agent 直接拼长串终端命令
+- 优先用包装脚本执行一次性、会明确退出的命令
+- 不要用它跑 watch、dev server、交互式命令
+- 若包装器返回 `__AGENT_RUN_TIMEOUT__` 或 `__AGENT_RUN_IDLE_TIMEOUT__`，就改为更短的命令或直接做静态分析，不要原样重试长挂起命令
+
 ## 打 VSIX
 
 ```powershell
