@@ -37,6 +37,7 @@ node tools/patch-extension-id.cjs
 |----------|------|
 | （默认） | **未设置** `MESSENGER_MAX_WAIT_MS` 时，服务端 **无限期** 阻塞等待，适合「一早挂上 MCP、整天不讲话也尽量不断」 |
 | `MESSENGER_MAX_WAIT_MS` | 设为有限毫秒数时，单次 `check_messages` / `ask_question` / `messenger_pause` 最长等待该时长，超时返回系统提示后须**同轮再次**调用 |
+| `MESSENGER_SLICE_WAIT_MS` | **默认 `120000`**：`check_messages` 在无新消息时每隔该时长返回一次**内部切片**（非用户消息），模型须**同轮再调** `check_messages`，以降低单次工具调用挂死时间、利于保活。设为 `0` / `off` / `false` 可关闭切片（恢复单次调用内长等）。与 `MESSENGER_MAX_WAIT_MS` 同时存在时，**先达到**较短者生效 |
 | `MESSENGER_FINITE_DEFAULT_MS` | 在未设置 `MESSENGER_MAX_WAIT_MS` 时仍希望有默认上限时使用（一般不必） |
 | `MESSENGER_POLL_INTERVAL_MS` | 轮询队列间隔（毫秒），默认 `100` |
 | `MESSENGER_HEARTBEAT_INTERVAL_MS` | 向客户端发 logging heartbeat 间隔，默认 `8000` |

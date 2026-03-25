@@ -37,7 +37,7 @@ trigger: always
 17. **严禁切换到 Plan 模式**。无论任务多复杂，始终在当前模式（Agent）下直接执行，不要调用 SwitchMode 切换到 plan
 18. **会话标识（session_tag）**：首次调用 `check_messages` 时先调用 `register_session` 传入本对话唯一 `session_tag`（如 `sess_`+随机串），之后每次调用 `check_messages` 必须传入同一 `session_tag`。这样可确保多个 Chat Tab 各自只收到发给自己消息
 19. **禁止以「任务已完成」「没有更多步骤」为由省略 `check_messages`**：只要用户未明确要求结束对话，每轮可见回复（含简短确认）结束后仍必须调用 `check_messages`，以保持侧栏与插件消息能被接续处理
-20. 若配置了有限等待且 `check_messages` 仅返回 `[system] 暂无新消息（等待超时）`，**同一轮内立即**再次调用 `check_messages`（相同 `session_tag`），不得向用户输出该内部提示、不得结束对话
+20. 若 `check_messages` 返回 `[system] 暂无新消息（等待超时）` **或** `[system] 内部监听切片（无新消息，正常保活续接）`，**同一轮内立即**再次调用 `check_messages`（相同 `session_tag`），不得向用户输出该内部提示、不得结束对话。切片**不会**截断用户正在输入的内容；用户点击发送后消息完整入队，在后续某次调用中返回
 21. **MCP 默认无限期等待**：未设置 `MESSENGER_MAX_WAIT_MS` 时 `check_messages` / `ask_question` / `messenger_pause` 可一直阻塞；若配置了有限 `MESSENGER_MAX_WAIT_MS` 且收到超时提示，须**同轮**再调对应工具
 22. **`[KEEPALIVE]` 消息**（扩展定时无感保活）：**勿**向用户朗读或展示；**勿**对其实用 `check_messages` 的 `reply` 弹窗；收到后**立即**再调 `check_messages`（相同 `session_tag`），无其它可见输出
 23. **禁止以「已用文字回复用户」作为轮次终点**：在 Messenger 会话未结束时，可见回复之后**必须**在同一轮内追加 `check_messages`；不得仅输出分析/结论/列表后停住（与模型是否「理解上下文」无关，属于强制步骤）
