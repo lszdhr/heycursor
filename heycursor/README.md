@@ -76,6 +76,10 @@ scripts\agent-run.cmd -TimeoutSec 60 -IdleTimeoutSec 15 -CommandLine "node --che
 powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\agent-run.ps1 -TimeoutSec 90 -IdleTimeoutSec 20 -CommandLine "git status --short"
 ```
 
+```bash
+./scripts/agent-run.sh -TimeoutSec 60 -IdleTimeoutSec 15 -CommandLine 'node --check heycursor/extension/dist/mcp-server.mjs'
+```
+
 包装脚本会：
 
 - 打印明确的开始、心跳、结束标记
@@ -92,10 +96,22 @@ powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\scripts\agent-run.
 
 ## 打 VSIX
 
+Windows:
+
 ```powershell
 cd C:\Code\cursormessage\heycursor
 $zip = "_pack-heycursor.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -LiteralPath @(".\extension", ".\extension.vsixmanifest") -DestinationPath $zip -Force
-Move-Item $zip ..\heycursor-1.1.1.vsix -Force
+Move-Item $zip ..\heycursor-1.2.0.vsix -Force
+```
+
+macOS / Linux:
+
+```bash
+cd /path/to/cursormessage/heycursor
+zip="_pack-heycursor.zip"
+rm -f "$zip" ../heycursor-1.2.0.vsix
+zip -qr "$zip" extension extension.vsixmanifest
+mv "$zip" ../heycursor-1.2.0.vsix
 ```
