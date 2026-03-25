@@ -67,6 +67,9 @@ function replyFile() {
 function progressFile() {
   return path.join(getDataDir(), "progress.json");
 }
+function sessionActivityFile() {
+  return path.join(getDataDir(), "session_activity.json");
+}
 function ensureDir() {
   const dir = getDataDir();
   if (!fs.existsSync(dir)) {
@@ -76,7 +79,7 @@ function ensureDir() {
 function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
-function readQueue(sessionId) {
+function readQueueRaw(sessionId) {
   ensureDir();
   const file = queueFile();
   if (!fs.existsSync(file))
@@ -91,9 +94,36 @@ function readQueue(sessionId) {
     return [];
   }
 }
+function readQueue(sessionId) {
+  return readQueueRaw(sessionId).filter((item) => item?.type !== "keepalive");
+}
 function writeQueue(items) {
   ensureDir();
   fs.writeFileSync(queueFile(), JSON.stringify(items, null, 2), "utf-8");
+}
+function readSessionActivityMap() {
+  ensureDir();
+  const file = sessionActivityFile();
+  if (!fs.existsSync(file))
+    return {};
+  try {
+    const data = JSON.parse(fs.readFileSync(file, "utf-8"));
+    return data && typeof data === "object" ? data : {};
+  } catch {
+    return {};
+  }
+}
+function writeSessionActivityMap(data) {
+  ensureDir();
+  fs.writeFileSync(sessionActivityFile(), JSON.stringify(data, null, 2), "utf-8");
+}
+function updateSessionActivity(sessionId, patch) {
+  if (!sessionId || !patch || typeof patch !== "object")
+    return;
+  const all = readSessionActivityMap();
+  const prev = all[sessionId] && typeof all[sessionId] === "object" ? all[sessionId] : {};
+  all[sessionId] = { ...prev, ...patch, session_tag: sessionId };
+  writeSessionActivityMap(all);
 }
 function manualSessionTargetFile() {
   return path.join(getDataDir(), "manual_session_target.json");
@@ -246,7 +276,11 @@ function sessionsForWebviewDropdown() {
 var lastSessionStateJson = "";
 var lastSessionIntentAt = /* @__PURE__ */ new Map();
 var lastSessionHeartbeatAt = /* @__PURE__ */ new Map();
+var lastDisconnectPromptAt = /* @__PURE__ */ new Map();
+var disconnectPromptInflight = /* @__PURE__ */ new Set();
 var ACTIVE_TYPING_GRACE_MS = 9e4;
+var SUSPECTED_DISCONNECT_MS = 18e4;
+var PROMPT_RECOVERY_COOLDOWN_MS = 12e4;
 function buildSessionStateMessage() {
   return {
     type: "sessionState",
@@ -259,15 +293,21 @@ function buildSessionStateMessage() {
 function markSessionIntent(sessionId, active = true) {
   if (!sessionId)
     return;
-  if (active)
+  if (active) {
     lastSessionIntentAt.set(sessionId, Date.now());
-  else
+    updateSessionActivity(sessionId, {
+      last_user_intent_at: (/* @__PURE__ */ new Date()).toISOString()
+    });
+  } else
     lastSessionIntentAt.delete(sessionId);
 }
 function noteHeartbeatSent(sessionId) {
   if (!sessionId)
     return;
   lastSessionHeartbeatAt.set(sessionId, Date.now());
+  updateSessionActivity(sessionId, {
+    last_keepalive_injected_at: (/* @__PURE__ */ new Date()).toISOString()
+  });
 }
 function shouldSendKeepalive(sessionId, keepaliveMs) {
   if (!sessionId || !Number.isFinite(keepaliveMs) || keepaliveMs <= 0)
@@ -279,8 +319,106 @@ function shouldSendKeepalive(sessionId, keepaliveMs) {
   const lastHeartbeatAt = lastSessionHeartbeatAt.get(sessionId) || 0;
   return lastHeartbeatAt <= 0 || now - lastHeartbeatAt >= keepaliveMs;
 }
+function enqueueKeepalive(sessionId, source = "extension-idle-guard") {
+  if (!sessionId)
+    return false;
+  const queue = readQueueRaw();
+  queue.push({
+    id: makeId(),
+    type: "keepalive",
+    silent: true,
+    source,
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    session_id: sessionId
+  });
+  writeQueue(queue);
+  noteHeartbeatSent(sessionId);
+  return true;
+}
+function buildRecoveryQuery(sessionId) {
+  return `请继续调用 Cursor Messenger MCP 的 check_messages 工具恢复监听，session_tag: "${sessionId}"。如果会话仍需继续，请不要向用户解释内部状态，直接恢复监听。`;
+}
+function extractOldestPendingUserMessage(sessionId) {
+  const items = readQueueRaw(sessionId).filter((item) => item && item.type !== "keepalive");
+  if (items.length === 0)
+    return null;
+  let oldest = null;
+  for (const item of items) {
+    const ts = typeof item.timestamp === "string" ? Date.parse(item.timestamp) : NaN;
+    if (!Number.isFinite(ts))
+      continue;
+    if (oldest == null || ts < oldest.timestampMs) {
+      oldest = { id: item.id || "", type: item.type || "text", timestampMs: ts };
+    }
+  }
+  return oldest;
+}
+function getSessionHealth(sessionId) {
+  if (!sessionId)
+    return null;
+  const activity = readSessionActivityMap()[sessionId];
+  const oldestPending = extractOldestPendingUserMessage(sessionId);
+  if (!oldestPending)
+    return {
+      sessionId,
+      suspectedDisconnected: false,
+      pendingAgeMs: 0,
+      pendingCount: 0,
+      lastPollAgeMs: null
+    };
+  const now = Date.now();
+  const pendingAgeMs = Math.max(0, now - oldestPending.timestampMs);
+  const pendingCount = readQueue(sessionId).length;
+  const lastStartedAt = typeof activity?.last_check_messages_started_at === "string" ? Date.parse(activity.last_check_messages_started_at) : NaN;
+  const lastReturnedAt = typeof activity?.last_check_messages_returned_at === "string" ? Date.parse(activity.last_check_messages_returned_at) : NaN;
+  const lastPollAt = Math.max(Number.isFinite(lastStartedAt) ? lastStartedAt : 0, Number.isFinite(lastReturnedAt) ? lastReturnedAt : 0);
+  const lastConsumedAt = typeof activity?.last_consumed_at === "string" ? Date.parse(activity.last_consumed_at) : NaN;
+  const lastPollAgeMs = lastPollAt > 0 ? Math.max(0, now - lastPollAt) : null;
+  const consumedAfterPending = Number.isFinite(lastConsumedAt) && lastConsumedAt >= oldestPending.timestampMs;
+  const suspectedDisconnected = pendingAgeMs >= SUSPECTED_DISCONNECT_MS && !consumedAfterPending && (lastPollAgeMs == null || lastPollAgeMs >= ACTIVE_TYPING_GRACE_MS);
+  return {
+    sessionId,
+    suspectedDisconnected,
+    pendingAgeMs,
+    pendingCount,
+    lastPollAgeMs
+  };
+}
+async function maybePromptRecovery(sessionId) {
+  const health = getSessionHealth(sessionId);
+  if (!health?.suspectedDisconnected || disconnectPromptInflight.has(sessionId))
+    return;
+  const now = Date.now();
+  const lastPromptAt = lastDisconnectPromptAt.get(sessionId) || 0;
+  if (now - lastPromptAt < PROMPT_RECOVERY_COOLDOWN_MS)
+    return;
+  lastDisconnectPromptAt.set(sessionId, now);
+  disconnectPromptInflight.add(sessionId);
+  try {
+    updateSessionActivity(sessionId, {
+      suspected_disconnected_at: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    const ageMin = Math.max(1, Math.round(health.pendingAgeMs / 6e4));
+    const choice = await vscode.window.showWarningMessage(
+      `HeyCursor \u68C0\u6D4B\u5230 session ${sessionId} \u53EF\u80FD\u5DF2\u8131\u94FE\u3002\u961F\u5217\u91CC\u6709 ${health.pendingCount} \u6761\u5F85\u5904\u7406\u6D88\u606F\uFF0C\u5DF2\u7B49\u5F85\u7EA6 ${ageMin} \u5206\u949F\u3002`,
+      "\u6062\u590D\u76D1\u542C",
+      "\u590D\u5236\u6062\u590D\u6307\u4EE4"
+    );
+    if (choice === "\u6062\u590D\u76D1\u542C") {
+      updateSessionActivity(sessionId, {
+        last_recovery_triggered_at: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      await triggerCursorChat(buildRecoveryQuery(sessionId));
+    } else if (choice === "\u590D\u5236\u6062\u590D\u6307\u4EE4") {
+      await vscode.env.clipboard.writeText(buildRecoveryQuery(sessionId));
+      vscode.window.showInformationMessage("\u5DF2\u590D\u5236 HeyCursor \u6062\u590D\u6307\u4EE4");
+    }
+  } finally {
+    disconnectPromptInflight.delete(sessionId);
+  }
+}
 function sendText(text, sessionId) {
-  const queue = readQueue();
+  const queue = readQueueRaw();
   const item = {
     id: makeId(),
     type: "text",
@@ -292,10 +430,14 @@ function sendText(text, sessionId) {
   queue.push(item);
   writeQueue(queue);
   markSessionIntent(sessionId, true);
+  updateSessionActivity(sessionId, {
+    last_user_message_at: item.timestamp,
+    last_enqueued_at: item.timestamp
+  });
   maybeAutoLabelSession(sessionId, text);
 }
 function sendImage(filePath, caption, sessionId) {
-  const queue = readQueue();
+  const queue = readQueueRaw();
   const item = {
     id: makeId(),
     type: "image",
@@ -308,6 +450,10 @@ function sendImage(filePath, caption, sessionId) {
   queue.push(item);
   writeQueue(queue);
   markSessionIntent(sessionId, true);
+  updateSessionActivity(sessionId, {
+    last_user_message_at: item.timestamp,
+    last_enqueued_at: item.timestamp
+  });
   maybeAutoLabelSession(sessionId, caption || autoLabelFromFilePath(filePath) || "图片消息");
 }
 function queueImageFromDataUrl(dataUrl, caption, sessionId) {
@@ -328,7 +474,7 @@ function queueImageFromDataUrl(dataUrl, caption, sessionId) {
   }
 }
 function sendFile(filePath, suffix, sessionId) {
-  const queue = readQueue();
+  const queue = readQueueRaw();
   const item = {
     id: makeId(),
     type: "file",
@@ -341,13 +487,17 @@ function sendFile(filePath, suffix, sessionId) {
   queue.push(item);
   writeQueue(queue);
   markSessionIntent(sessionId, true);
+  updateSessionActivity(sessionId, {
+    last_user_message_at: item.timestamp,
+    last_enqueued_at: item.timestamp
+  });
   maybeAutoLabelSession(sessionId, autoLabelFromFilePath(filePath) || suffix || "文件消息");
 }
 function getQueueCount(sessionId) {
   return readQueue(sessionId).length;
 }
 function deleteQueueItem(id) {
-  const queue = readQueue().filter((item) => item.id !== id);
+  const queue = readQueueRaw().filter((item) => item.id !== id);
   writeQueue(queue);
 }
 function readQuestion() {
@@ -1329,7 +1479,7 @@ var pollTimer2;
 var lastQuestionId;
 var lastReplyTimestamp;
 var lastQueueCount;
-var chatTriggered = false;
+var lastChatTriggerAt = 0;
 function getMcpServerPath() {
   const extDir = path3.dirname(path3.dirname(__filename));
   return path3.join(extDir, "dist", "mcp-server.mjs");
@@ -1504,15 +1654,16 @@ function removeMcpConfigGlobal() {
   }
   return removed;
 }
-async function triggerCursorChat() {
-  if (chatTriggered)
+async function triggerCursorChat(query = "\u4F60\u597D\uFF0C\u8BF7\u5904\u7406\u6211\u7684\u6D88\u606F") {
+  const now = Date.now();
+  if (now - lastChatTriggerAt < 5e3)
     return;
-  chatTriggered = true;
+  lastChatTriggerAt = now;
   try {
     await vscode.commands.executeCommand("workbench.action.chat.newChat");
     await new Promise((r) => setTimeout(r, 500));
     await vscode.commands.executeCommand("workbench.action.chat.open", {
-      query: "\u4F60\u597D\uFF0C\u8BF7\u5904\u7406\u6211\u7684\u6D88\u606F"
+      query
     });
   } catch {
   }
@@ -1545,6 +1696,7 @@ function startPolling() {
     const sid = getCurrentSessionId();
     const queue = readQueue(sid);
     const count = queue.length;
+    void maybePromptRecovery(sid);
     pollTick += 1;
     const forceSync = pollTick % 4 === 0;
     if (count !== lastQueueCount || forceSync) {
@@ -1972,8 +2124,7 @@ function activate(context) {
           return;
         if (!shouldSendKeepalive(tag, keepaliveMs))
           return;
-        sendText(`[KEEPALIVE] ${(/* @__PURE__ */ new Date()).toISOString()}`, tag);
-        noteHeartbeatSent(tag);
+        enqueueKeepalive(tag);
       } catch {
       }
     }, KEEPALIVE_TICK_MS);

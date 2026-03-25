@@ -32,9 +32,25 @@
 ## Deferred（本迭代不实现）
 
 - **SQLite 邮箱**：与 `queue.json` 并存迁移工作量大，记在后续里程碑。
+- [x] **T6**: 实现会话活跃状态文件
+  - Depends: none
+  - Done-when: extension 与 mcp-server 共享 session_activity.json 并记录消费/轮询/保活时间
+  - Result: heycursor/extension/dist/extension.js 与 heycursor/extension/dist/mcp-server.mjs 共享 session_activity.json
+- [x] **T7**: 将扩展保活改为结构化 keepalive 包
+  - Depends: T6
+  - Done-when: queue 中写入 keepalive 类型，check_messages 静默处理并续接
+  - Result: 扩展写入 keepalive 队列项，mcp-server 静默消费并续接 check_messages
+- [x] **T8**: 实现疑似断链检测与恢复提示
+  - Depends: T6
+  - Done-when: 扩展能根据活跃状态判断 suspected_disconnected 并在面板显示恢复提示
+  - Result: 扩展按队列滞留和轮询时间判定疑似断链并提供恢复监听/复制指令
+- [x] **T9**: 验证打包并提交当前版本
+  - Depends: T7,T8
+  - Done-when: 语法检查通过、VSIX 重打包并完成中文提交
+  - Result: 语法检查通过并重打包 heycursor-1.1.1.vsix，准备中文提交
 
 ## Summary
 
-- **MCP**：`recall_sessions`、`messenger_pause`、`propose_session_tag`；`register_session` 支持 `label`；`ask_question` 与 `messenger_pause` 共用 `waitForAnswerOrTimeout`；`writeQueue` 原子写；`propose_session_tag` 文案修正。
-- **规则**：`.cursor`/`.windsurf` 增至 30 条（含反虚假调用、pause/recall/label、规则同步）；新增 `mcp-messenger-bundled.mdc`，`extension.js` 运行时从该文件读取规则正文。
-- **文档**：`AGENTS.md`、Skill、`heycursor/README.md` 与 tracker 已对齐。
+- 新增 session_activity.json 作为扩展与 mcp-server 的共享活跃状态。
+- 扩展保活改为结构化 keepalive 包，不再以普通文本 [KEEPALIVE] 混入用户队列。
+- 当待处理消息滞留且 check_messages 轮询长期未更新时，扩展会提示疑似脱链并提供恢复监听/复制恢复指令。
