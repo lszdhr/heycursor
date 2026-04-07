@@ -1,6 +1,6 @@
 # Agent 约定（本仓库）
 
-## Cursor / Windsurf Messenger MCP
+## Cursor Messenger MCP
 
 本仓库维护 HeyCursor / Cursor Messenger 相关代码。凡**已启用 Messenger MCP** 且用户通过插件侧栏与会话交互时，助手须遵守：
 
@@ -12,7 +12,6 @@
 详细条款见：
 
 - `.cursor/rules/mcp-messenger.mdc`（Cursor）
-- `.windsurf/rules/mcp-messenger.md`（Windsurf）
 
 可选：项目 Skill `.cursor/skills/messenger-mcp-protocol/SKILL.md`（与上表一致，便于模型检索）。
 

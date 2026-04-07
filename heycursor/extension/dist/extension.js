@@ -311,7 +311,7 @@ var lastSessionHeartbeatAt = /* @__PURE__ */ new Map();
 var lastDisconnectPromptAt = /* @__PURE__ */ new Map();
 var disconnectPromptInflight = /* @__PURE__ */ new Set();
 var ACTIVE_TYPING_GRACE_MS = 9e4;
-var SUSPECTED_DISCONNECT_MS = 18e4;
+var SUSPECTED_DISCONNECT_MS = 9e4;
 var PROMPT_RECOVERY_COOLDOWN_MS = 12e4;
 function buildSessionStateMessage() {
   return {
@@ -463,7 +463,7 @@ async function maybePromptRecovery(sessionId) {
 }
 function sendText(text, sessionId) {
   const queue = readQueueRaw();
-  const content = appendProtocolNote(text, sessionId);
+  const content = text;
   const item = {
     id: makeId(),
     type: "text",
