@@ -17,6 +17,6 @@
 
 ## 与 CueStack（HAP）的对齐（实现侧）
 
-HeyCursor `mcp-server.mjs`：`check_messages` 在未设 `MESSENGER_MAX_WAIT_MS` 为有限值时可长期等待；若达到 `MESSENGER_FORCE_RETURN_MS`（默认 15 分钟）会返回极简保活文本，令模型同轮再调，兼顾保活与单次调用时长。`ask_question` / `messenger_pause` 的等待行为仍主要由 `MESSENGER_MAX_WAIT_MS` 等控制。需要单次硬上限时再设 `MESSENGER_MAX_WAIT_MS` 或 `MESSENGER_FINITE_DEFAULT_MS`。各工具返回追加 `[protocol]` 尾缀。共享邮箱为 **`queue.json` + 会话文件**。补充工具：`propose_session_tag`、`register_session` 的 `label`、`recall_sessions`（按 `hints` 筛 `session_tag`/`label`）；`writeQueue` 对 `queue.json` 使用临时文件再 rename，降低半写风险。
+HeyCursor `mcp-server.mjs`：`check_messages` 默认 `MESSENGER_MAX_WAIT_MS=90000`（90 秒短超时循环），与 CursorMr 策略一致。超时返回标记 `isError: true`，帮助弱模型正确识别并重调。`MESSENGER_FORCE_RETURN_MS`（默认 15 分钟）作为兜底。各工具返回追加 `[→ check_messages]` 尾缀。共享邮箱为 **`queue.json` + 会话文件**。补充工具：`propose_session_tag`、`register_session` 的 `label`、`recall_sessions`（按 `hints` 筛 `session_tag`/`label`）；`writeQueue` 对 `queue.json` 使用临时文件再 rename，降低半写风险。
 
-扩展默认会在会话空闲 **5 分钟**后向队列写入 **`type: "keepalive"`** 结构化保活项（`HEYCURSOR_KEEPALIVE_MS`，`0`/`off`/`false`/`no` 关闭），便于长时间无人输入时仍周期性走通 MCP 循环；**无法**保证 Cursor 不关、机器不休眠时仍不断连。
+扩展默认会在会话空闲 **5 分钟**后向队列写入 **`type: "keepalive"`** 结构化保活项（`HEYCURSOR_KEEPALIVE_MS`，`0`/`off`/`false`/`no` 关闭），作为短超时循环之外的补充保活手段。

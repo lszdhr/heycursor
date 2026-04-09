@@ -1669,6 +1669,7 @@ function buildMessengerMcpEnv(dataDir, prevEnv) {
   const env = typeof prevEnv === "object" && prevEnv !== null ? { ...prevEnv } : {};
   delete env.MESSENGER_INFINITE_WAIT;
   env.MESSENGER_DATA_DIR = dataDir;
+  if (!env.MESSENGER_MAX_WAIT_MS) env.MESSENGER_MAX_WAIT_MS = "90000";
   return env;
 }
 function buildMessengerMcpEntry(dataDir, prevEntry) {

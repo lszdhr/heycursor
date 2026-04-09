@@ -21023,14 +21023,14 @@ var MAX_WAIT_MS = (() => {
       if (Number.isFinite(d) && d > 0)
         return d;
     }
-    return Number.POSITIVE_INFINITY;
+    return 9e4;
   }
   const trimmed = String(env).trim().toLowerCase();
   if (trimmed === "0" || trimmed === "infinite" || trimmed === "infinity" || trimmed === "-1" || trimmed === "unlimited")
     return Number.POSITIVE_INFINITY;
   const raw = Number(env);
   if (!Number.isFinite(raw))
-    return Number.POSITIVE_INFINITY;
+    return 9e4;
   if (raw <= 0)
     return Number.POSITIVE_INFINITY;
   return raw;
@@ -21520,7 +21520,7 @@ ${lines.join("\n")}` + MESSENGER_PROTOCOL_TAIL
 );
 server.tool(
   "check_messages",
-  "\u68C0\u67E5\u5E76\u8FD4\u56DE\u5F85\u5904\u7406\u7684\u7528\u6237\u6D88\u606F\u3002\u6BCF\u8F6E\u56DE\u590D\u5B8C\u6210\u540E\u5FC5\u987B\u8C03\u7528\u6B64\u5DE5\u5177\uFF08\u534F\u8BAE\u89C4\u5B9A\u7684\u4E0B\u4E00\u6B65\uFF09\u3002\u540C\u4E00\u5DE5\u4F5C\u533A\u591A\u4F1A\u8BDD\u65F6\u8BF7\u4F20\u5165 register_session \u5F97\u5230\u7684 session_tag\u3002\u65E0\u4E1A\u52A1\u6D88\u606F\u65F6\u672C\u5DE5\u5177\u4F1A\u7EE7\u7EED\u7B49\u5F85\uFF1B\u672A\u8BBE\u7F6E MESSENGER_MAX_WAIT_MS \u65F6\u5355\u6B21\u8C03\u7528\u53EF\u957F\u671F\u7B49\u5F85\uFF0C\u82E5\u8FBE\u5230 MESSENGER_MAX_WAIT_MS \u5219\u8FD4\u56DE\u8D85\u65F6\u63D0\u793A\u5E76\u9700\u540C\u8F6E\u518D\u8C03\u3002\u4E3A\u907F\u514D\u5355\u6B21\u8C03\u7528\u6302\u8D77\u8FC7\u4E45\uFF0C\u8FBE\u5230 MESSENGER_FORCE_RETURN_MS\uFF08\u9ED8\u8BA4 900000ms\uFF09\u65F6\u4F1A\u8FD4\u56DE\u6781\u7B80\u4FDD\u6D3B\u6587\u672C\uFF0C\u6A21\u578B\u5FC5\u987B\u7ACB\u5373\u518D\u6B21\u8C03\u7528 check_messages\u3002\u53EF\u7528 MESSENGER_POLL_INTERVAL_MS \u8C03\u6574\u8F6E\u8BE2 queue \u95F4\u9694\u3002",
+  "检查并返回待处理的用户消息。每轮回复完成后必须调用此工具（协议规定的下一步）。同一工作区多会话时请传入 register_session 得到的 session_tag。无业务消息时本工具会等待最多 90 秒后返回 isError=true 的超时提示——收到超时提示后禁止输出任何文字，必须立即再次调用 check_messages。可用 MESSENGER_MAX_WAIT_MS 自定义超时。",
   {
     session_tag: external_exports.string().optional().describe("\u5F53\u524D\u5BF9\u8BDD\u7684\u4F1A\u8BDD\u6807\u8BC6\uFF0C\u4E0E register_session \u4E00\u81F4\uFF0C\u7528\u4E8E\u591A\u4F1A\u8BDD\u9694\u79BB"),
     reply: external_exports.string().optional().describe("\u672C\u8F6E\u56DE\u590D\u6458\u8981\uFF08\u652F\u6301 Markdown\uFF09\uFF0C\u5C06\u63A8\u9001\u5230\u63D2\u4EF6\u754C\u9762\u5C55\u793A\u7ED9\u7528\u6237")
@@ -21635,7 +21635,7 @@ server.tool(
           });
         }
         await appendServerLog("info", `check_messages timed out after ${MAX_WAIT_MS}ms, requesting re-call`);
-        result = { content: [{ type: "text", text: getTimeoutText() }] };
+        result = { content: [{ type: "text", text: getTimeoutText() }], isError: true };
         return result;
       }
       const elapsedWait = Date.now() - waitStart;
@@ -21646,7 +21646,7 @@ server.tool(
           });
         }
         await appendServerLog("info", `check_messages force return after ${Math.round(elapsedWait / 1e3)}s to keep model active`);
-        result = { content: [{ type: "text", text: getForceReturnText() + MESSENGER_PROTOCOL_TAIL }] };
+        result = { content: [{ type: "text", text: getForceReturnText() + MESSENGER_PROTOCOL_TAIL }], isError: true };
         return result;
       }
       if (Date.now() >= nextHeartbeatAt) {

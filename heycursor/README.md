@@ -29,22 +29,21 @@ node tools/patch-extension-id.cjs
 2. 再读取 `https://api2.cursor.sh/aiserver.v1.AuthService/GetUserMeta`、`https://api2.cursor.sh/auth/full_stripe_profile`、`https://api2.cursor.sh/auth/stripe_profile` 补齐套餐、账单周期与用户信息
 3. 若官方会话过期，则自动用本地 `refreshToken` 请求 `https://api2.cursor.sh/oauth/token` 刷新 `accessToken` 后重试
 
-## MCP 服务端：长等待与协议提醒（借鉴 CueStack HAP）
+## MCP 服务端：短超时循环保活
 
-`mcp-server.mjs` 通过 **阻塞轮询** `queue.json` / `answer.json` 等待用户，与 Cue 的 `cue()` 等用户在共享存储上落库类似。
+`mcp-server.mjs` 通过 **阻塞轮询** `queue.json` / `answer.json` 等待用户。默认采用 **90 秒短超时循环** 策略保活，与 CursorMr 一致。
 
 | 环境变量 | 作用 |
 |----------|------|
-| （默认） | **未设置** `MESSENGER_MAX_WAIT_MS` 时，服务端 **无限期** 阻塞等待，适合「一早挂上 MCP、整天不讲话也尽量不断」 |
-| `MESSENGER_MAX_WAIT_MS` | 设为有限毫秒数时，单次 `check_messages` / `ask_question` / `messenger_pause` 最长等待该时长，超时返回系统提示后须**同轮再次**调用 |
-| `MESSENGER_FINITE_DEFAULT_MS` | 在未设置 `MESSENGER_MAX_WAIT_MS` 时仍希望有默认上限时使用（一般不必） |
-| `MESSENGER_FORCE_RETURN_MS` | 为避免单次 `check_messages` 挂起过久，达到该时长时返回极简保活文本，模型须立即重调；默认 `900000`（15 分钟） |
+| （默认） | `MESSENGER_MAX_WAIT_MS` 默认 **90000**（90 秒），每次超时返回 `isError: true`，模型须立即重调 |
+| `MESSENGER_MAX_WAIT_MS` | 自定义单次等待上限；设为 `0` / `infinite` / `unlimited` 可恢复无限等待 |
+| `MESSENGER_FORCE_RETURN_MS` | 兜底强制返回，默认 `900000`（15 分钟）；搭配短超时时通常不会触发 |
 | `MESSENGER_POLL_INTERVAL_MS` | 轮询队列间隔（毫秒），默认 `300` |
 | `MESSENGER_HEARTBEAT_INTERVAL_MS` | 向客户端发 logging heartbeat 间隔，默认 `8000` |
 
-工作区 **`setupMcp` 写入的 `mcp.json`** 会按当前机器实际的 `mcp-server.mjs` 路径与 `MESSENGER_DATA_DIR` 自动生成，不再写入无运行时意义的 `MESSENGER_INFINITE_WAIT`。
+超时返回标记为 `isError: true`，帮助弱模型正确识别「这不是成功结果，需要重新调用」。
 
-工具返回末尾会追加 `[protocol] …` 短提醒，强制模型继续 `check_messages`（类似 cuemcp 在返回里夹带约束文案）。
+工具返回末尾会追加 `[→ check_messages]` 短提醒，强制模型继续调用。
 
 其它 MCP 工具（节选）：`propose_session_tag`、`register_session`（可选 `label`）、`recall_sessions`、`messenger_pause`（单按钮「继续」，与 `ask_question` 共用问答管道）。扩展内置规则正文为 `extension/dist/mcp-messenger-bundled.mdc`，应与仓库 `.cursor/rules/mcp-messenger.mdc` 同步。
 
