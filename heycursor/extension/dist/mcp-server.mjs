@@ -21013,6 +21013,29 @@ var REPLY_FILE = path.join(DATA_DIR, "reply.json");
 var PROGRESS_FILE = path.join(DATA_DIR, "progress.json");
 var LOG_FILE = path.join(DATA_DIR, "server.log");
 var SESSION_HISTORY_FILE = path.join(DATA_DIR, "session_history.json");
+var SESSIONS_FILE = path.join(DATA_DIR, "sessions.json");
+async function readSessionsState() {
+  try {
+    const raw = await fs.readFile(SESSIONS_FILE, "utf-8");
+    const data = JSON.parse(raw);
+    return data && typeof data === "object" ? data : { counter: 0, tags: [] };
+  } catch { return { counter: 0, tags: [] }; }
+}
+async function writeSessionsState(state) {
+  await fs.writeFile(SESSIONS_FILE, JSON.stringify(state, null, 2), "utf-8");
+}
+async function allocateSessionTag() {
+  await ensureDataDir();
+  const state = await readSessionsState();
+  state.counter = (state.counter || 0) + 1;
+  const tag = "\u5BF9\u8BDD" + state.counter;
+  if (!Array.isArray(state.tags)) state.tags = [];
+  state.tags.push(tag);
+  if (!state.activity) state.activity = {};
+  state.activity[tag] = Date.now();
+  await writeSessionsState(state);
+  return tag;
+}
 var POLL_INTERVAL = Number(process.env.MESSENGER_POLL_INTERVAL_MS) > 0 ? Number(process.env.MESSENGER_POLL_INTERVAL_MS) : 300;
 var HEARTBEAT_INTERVAL = Number(process.env.MESSENGER_HEARTBEAT_INTERVAL_MS) || 8e3;
 var MAX_WAIT_MS = (() => {
@@ -21520,13 +21543,28 @@ ${lines.join("\n")}` + MESSENGER_PROTOCOL_TAIL
 );
 server.tool(
   "check_messages",
-  "检查并返回待处理的用户消息。每轮回复完成后必须调用此工具（协议规定的下一步）。同一工作区多会话时请传入 register_session 得到的 session_tag。无业务消息时本工具会等待最多 90 秒后返回 isError=true 的超时提示——收到超时提示后禁止输出任何文字，必须立即再次调用 check_messages。可用 MESSENGER_MAX_WAIT_MS 自定义超时。",
+  "检查并返回待处理的用户消息。每轮回复完成后必须调用此工具。首次调用可不传 session_tag，系统自动分配并在返回中告知；之后每次必须传入分配的 session_tag。无消息时等待最多 90 秒后返回 isError=true——收到后禁止输出任何文字，立即再次调用 check_messages。",
   {
-    session_tag: external_exports.string().optional().describe("\u5F53\u524D\u5BF9\u8BDD\u7684\u4F1A\u8BDD\u6807\u8BC6\uFF0C\u4E0E register_session \u4E00\u81F4\uFF0C\u7528\u4E8E\u591A\u4F1A\u8BDD\u9694\u79BB"),
+    session_tag: external_exports.string().optional().describe("\u5BF9\u8BDD\u6807\u8BC6\u3002\u9996\u6B21\u53EF\u4E0D\u4F20\uFF0C\u7CFB\u7EDF\u81EA\u52A8\u5206\u914D\uFF1B\u540E\u7EED\u6BCF\u6B21\u5FC5\u987B\u4F20\u5165"),
     reply: external_exports.string().optional().describe("\u672C\u8F6E\u56DE\u590D\u6458\u8981\uFF08\u652F\u6301 Markdown\uFF09\uFF0C\u5C06\u63A8\u9001\u5230\u63D2\u4EF6\u754C\u9762\u5C55\u793A\u7ED9\u7528\u6237")
   },
   async ({ reply, session_tag }, extra) => {
     await ensureDataDir();
+    if (!session_tag || session_tag.trim() === "") {
+      const allocated = await allocateSessionTag();
+      session_tag = allocated;
+      await appendServerLog("info", `check_messages started, session_tag=(none)`);
+      await appendServerLog("info", `Allocated new session tag: ${allocated}`);
+      await fs.writeFile(CURRENT_SESSION_FILE, JSON.stringify({ session_tag: allocated }, null, 2), "utf-8");
+      try {
+        let list = [];
+        try { const raw2 = await fs.readFile(KNOWN_SESSIONS_FILE, "utf-8"); const data2 = JSON.parse(raw2); list = Array.isArray(data2) ? data2 : []; } catch {}
+        list.push({ session_tag: allocated, label: allocated, updated_at: (new Date()).toISOString() });
+        await fs.writeFile(KNOWN_SESSIONS_FILE, JSON.stringify(list, null, 2), "utf-8");
+      } catch {}
+      const allocResult = { content: [{ type: "text", text: `[system] \u4F60\u7684\u5BF9\u8BDD\u6807\u8BC6\u662F\u300C${allocated}\u300D\u3002\u540E\u7EED\u6BCF\u6B21\u8C03\u7528 check_messages \u65F6\u5FC5\u987B\u4F20\u5165 session_tag="${allocated}"\u3002\u53EA\u6709\u6807\u8BB0\u4E3A\u300C${allocated}\u300D\u6216\u65E0\u6807\u7B7E\u7684\u6D88\u606F\u4F1A\u88AB\u53D1\u9001\u7ED9\u4F60\u3002` + MESSENGER_PROTOCOL_TAIL }] };
+      return allocResult;
+    }
     const flight = beginCheckMessagesFlight(session_tag);
     if (flight.joined) {
       const joinedMs = Math.max(0, Date.now() - flight.startedAt);

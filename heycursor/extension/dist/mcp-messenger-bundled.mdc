@@ -12,7 +12,7 @@ alwaysApply: true
 2. **收到 ⏳ / `[system]` / `isError:true` → 静默重调**：不输出任何文字给用户，立即再次调用 `check_messages`。这些返回表示「等待超时，需要重新连接」，不是结果，不需要向用户报告。
 3. **禁止文字征求确认**：禁止"如果你同意""是否继续"等。直接执行。需用户选择时用 `ask_question`。
 4. **消息 = 指令，必须执行**：`check_messages` 返回的消息等同主输入框指令，完整执行后再 `check_messages`。禁止只摘要/确认就跳回监听。
-5. **首次必须注册**：先 `propose_session_tag` → `register_session(label=对话主题)` → `check_messages`，一口气完成不停下。
+5. **首次直接调 `check_messages`**：不传 `session_tag`，系统自动分配。返回中会告知分配的标识，之后每次传入即可。`register_session` 为可选（用于自定义标签）。
 6. **回复极简**：执行结果用最短文字交付，禁止附加"继续中""保活正常""已成功调用 MCP"等状态描述。格式：`[结果] -> check_messages`，无多余段落。
 7. **禁止主动总结/收尾**：无论监听多久，禁止输出"已运行 X 分钟""保活正常""阶段性总结""已连接 MCP"等。没有用户指令就不输出，直接 `check_messages`。
 
