@@ -21056,7 +21056,7 @@ var MESSENGER_PROTOCOL_TAIL = "\n[\u2192 check_messages]";
 function getTimeoutText() { _mcpRoundCounter++; return "\u23F3" + "t" + _mcpRoundCounter + MESSENGER_PROTOCOL_TAIL; }
 function getAskTimeoutText() { _mcpRoundCounter++; return "\u23F3" + "a" + _mcpRoundCounter + "\n[\u2192 ask_question]"; }
 var _msgRoundCounter = 0;
-function getSystemSuffix(session_tag) { _msgRoundCounter++; const tagSuffix = session_tag ? session_tag.slice(-6) : ""; return `\n---\n[r${_msgRoundCounter}${tagSuffix ? "/" + tagSuffix : ""}] \u6267\u884C\u5B8C\u6BD5\u3002\u2192 check_messages`; }
+function getSystemSuffix(session_tag) { _msgRoundCounter++; const tagSuffix = session_tag ? session_tag.slice(-6) : ""; return `\n---\n[r${_msgRoundCounter}${tagSuffix ? "/" + tagSuffix : ""}] \u2192 check_messages`; }
 var checkMessagesFlights = new Map();
 function getCheckMessagesFlightKey(session_tag) {
   if (session_tag == null || session_tag === "")
