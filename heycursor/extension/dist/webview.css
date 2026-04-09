@@ -16,14 +16,14 @@ body {
   min-height: 100%;
 }
 /* Message tab content is wrongly passed as extra Fragment children; hide those nodes when queue/usage is active */
-.container.tab-queue .session-target-row,
+.container.tab-queue .session-tab-bar,
 .container.tab-queue .session-rename-row,
 .container.tab-queue .input-row,
 .container.tab-queue .buttons,
 .container.tab-queue .reply-card,
 .container.tab-queue .history-section,
 .container.tab-queue .question-box,
-.container.tab-usage .session-target-row,
+.container.tab-usage .session-tab-bar,
 .container.tab-usage .session-rename-row,
 .container.tab-usage .input-row,
 .container.tab-usage .buttons,
@@ -100,32 +100,43 @@ body {
 .attach-remove:hover {
   filter: brightness(1.08);
 }
-.session-target-row {
+.session-tab-bar {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scrollbar-width: thin;
 }
-.session-target-label {
-  font-size: 0.85em;
-  color: var(--vscode-descriptionForeground);
-  white-space: nowrap;
+.session-tab-bar::-webkit-scrollbar {
+  height: 3px;
 }
-.session-select {
-  flex: 1;
-  min-width: 120px;
-  max-width: 100%;
-  padding: 6px 8px;
-  font-size: inherit;
+.session-tab-bar::-webkit-scrollbar-thumb {
+  background: var(--vscode-scrollbarSlider-background);
+  border-radius: 2px;
+}
+.session-tab {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 0.82em;
   font-family: inherit;
-  color: var(--vscode-dropdown-foreground);
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border);
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-dropdown-border));
   border-radius: 4px;
-  outline: none;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.session-select:focus {
-  border-color: var(--vscode-focusBorder);
+.session-tab:hover {
+  background: var(--vscode-list-hoverBackground);
+}
+.session-tab.active {
+  color: var(--vscode-button-foreground, #fff);
+  background: var(--vscode-button-background);
+  border-color: var(--vscode-button-background);
 }
 .session-rename-row {
   display: flex;

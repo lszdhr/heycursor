@@ -1,72 +1,38 @@
 ---
-description: "自动调用 Messenger MCP 检查待发送消息"
+description: "Messenger MCP 核心协议（alwaysApply）"
 globs: "**/*"
 alwaysApply: true
 ---
 
-# MCP 工具调用规则
+# Messenger MCP 协议
 
-## 🔴 核心规则（违反将导致会话断开）
+## 🔴 铁律（每轮自检，违反 = 会话断连）
 
-**C1. 每轮回复后必须调用 `check_messages`**
-回复完整输出后，最后一步必须调用 `check_messages`（带 `session_tag`）。适用于 Agent/Plan/Debug/Ask 所有模式，**含**纯文字回合。禁止以「任务已完成」「纯答疑」「没有显式工具」为由省略。形成永续循环：回复 → `check_messages` → 收到消息 → 回复 → `check_messages`。严禁在回合开始或回复未完成时调用。
+1. **回复后必须 `check_messages`**：每轮可见输出完毕后，最后一步**必须**调用 `check_messages(session_tag)`。纯文字回合也不例外。禁止以「任务完成」「纯答疑」省略。
+2. **收到 ⏳ / `[system]` → 静默重调**：不输出任何文字，立即调 `check_messages`。
+3. **禁止文字征求确认**：禁止"如果你同意""是否继续"等。直接执行。需用户选择时用 `ask_question`。
+4. **消息 = 指令，必须执行**：`check_messages` 返回的消息等同主输入框指令，完整执行后再 `check_messages`。禁止只摘要/确认就跳回监听。
+5. **首次必须注册**：先 `propose_session_tag` → `register_session(label=对话主题)` → `check_messages`，一口气完成不停下。
+6. **回复极简**：执行结果用最短文字交付，禁止附加"继续中""保活正常"等状态描述。格式：`[结果] -> check_messages`，无多余段落。
+7. **禁止主动总结/收尾**：无论监听多久，禁止输出"已运行 X 分钟""保活正常""阶段性总结"等。没有用户指令就不输出，直接 `check_messages`。
 
-**C2. `[system]` 返回 → 静默重调**
-收到 `[system] 暂无新消息`、`[system] 内部监听切片`、`[system] 收到内部保活包` 时，**同一轮内立即**再次调用 `check_messages`（相同 `session_tag`），不得向用户输出、不得结束对话。切片不截断用户正在编辑的内容，发送后完整入队。
+## 工具速查
 
-**C3. 异常/取消 → 重调对应工具**
-若 `check_messages`、`ask_question`、`messenger_pause` 因客户端取消、连接抖动或内部异常意外返回，严禁将内部提示输出给用户，必须立刻再次调用对应工具。
+| 场景 | 工具 |
+|------|------|
+| 等下一条消息 | `check_messages(session_tag)` |
+| 需用户选择 | `ask_question(questions)` |
+| 推进度到侧栏 | `send_progress(progress)` |
+| 等用户手动继续 | `messenger_pause` |
+| 忘了 tag | `recall_sessions(hints)` |
 
-**C4. 用户决策用 `ask_question`，回合结束用 `check_messages`**
-需要用户做选择时必须调用 `ask_question`；严禁使用 Cursor 内置 `ask_user_question`。禁止用 `ask_question` 问「还有别的需要吗」。收到回答处理完毕后仍需 `check_messages`。
+## 注意
 
-**C5. 禁止虚假 MCP 陈述**
-不得在可见回复中声称已调用 MCP 工具或编造返回内容；须真实发起调用并以返回为准。
-
-**C6. 收到的消息即用户指令，必须执行**
-`check_messages` 返回的用户消息等同于 Composer 主输入框的指令。你必须完整执行用户的任务（写代码、分析项目、回答问题等），**禁止**仅列出/确认/摘要消息内容后直接调用 `check_messages` 监听。正确流程：① 完整执行用户指令并输出结果 → ② 调用 `check_messages` 继续监听。跳过①直接②视为违规。
-
-**C7. 禁止用文字征求确认，直接执行**
-禁止输出"如果你同意""如果你愿意""是否继续""你希望我…吗"等征求许可的文字后等待用户回复。收到明确任务后**立即执行**。仅当存在多个互斥方案且无法自行判断时，调用 `ask_question` 让用户选择，**不得用文字询问**。
-
----
-
-## ⚪ 工具使用指南
-
-### 会话管理
-
-6. **会话注册**：首次调用 `check_messages` 前先 `register_session`（传入唯一 `session_tag`，如 `sess_` + 随机串）。`propose_session_tag` 可生成可读建议；`register_session` 可选 `label`（人类可读短标签）
-7. **会话找回**：忘记 `session_tag` 时调用 `recall_sessions`（可选 `hints`），从返回列表取正确 tag
-8. **`messenger_pause`**：需用户显式点击「继续」时调用（如等待人工操作）；完成后仍须 `check_messages`
-
-### `ask_question` 格式
-
-9. 参数: `{ "questions": [{ "question": "文本", "options": [{ "id": "a", "label": "选项A" }], "allow_multiple": false }] }`
-10. 单选 `false` / 多选 `true`，可混合。用户可在每题额外输入补充文本，无需添加"其他"选项
-
-### `reply` 与 `send_progress`
-
-11. `check_messages` 可选参数 `reply`（Markdown），将摘要推送到插件界面；对话结束前建议附带
-12. 多步骤任务每完成关键步骤后调用 `send_progress`（立即返回）。`progress` 含：已完成操作、当前方案、下一步计划
-
-### 运行环境
-
-13. MCP 默认无限期等待；默认启用切片 `MESSENGER_SLICE_WAIT_MS=540000`（约 9 分钟）
-14. **双通道**：Cursor 主界面输入框消息不保证入队；插件侧栏发送的才会。队列空为正常现象
-15. 保活机制说明时须在主对话写简短可见说明，不得仅依赖侧栏摘要
-
-### 禁止事项
-
-16. 禁止调用 subagent 并发任务
-17. 严禁切换到 Plan 模式（SwitchMode `plan`）
-18. 包装器超时（`__AGENT_RUN_TIMEOUT__` / `__AGENT_RUN_IDLE_TIMEOUT__`）视为失败，改用更短命令或文件分析
-19. **禁止终端写长命令**：>120 字符或含复杂逻辑（`&&`/`||`/`for`/`while`/heredoc）时，必须先写入临时脚本（如 `/tmp/task_xxx.sh`），脚本需有明确退出码
-
-### 参考
-
-20. 仓库 `AGENTS.md` 与 Skill `.cursor/skills/messenger-mcp-protocol/SKILL.md` 与本规则一致
-21. 维护协议时须同步更新扩展内置 `.mdc` 与仓库 `.mdc`
+- **`register_session` 的 `label`**：用对话主题命名（如"重构登录模块"），不要用 "cursor-chat" 等无意义名称。
+- 异常/取消返回 → 不输出给用户，立即重调对应工具。
+- 扩展侧栏和主对话是**双通道**，队列空属正常。
+- 禁止 subagent、禁止切 Plan 模式。
 
 ---
 
-**回合结束（强制）**：回复完整输出后，最后一步必须调用 `check_messages`（带 `session_tag`）。未注册过则先 `register_session`。严禁输出完毕后不调工具就结束。
+**强制**：结果输出完毕 -> 立即 `check_messages(session_tag)`。禁止在结果之后追加总结、状态描述或过渡句。

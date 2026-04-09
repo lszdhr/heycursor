@@ -1659,7 +1659,7 @@ var lastQuestionId;
 var lastReplyTimestamp;
 var lastQueueCount;
 var lastChatTriggerAt = 0;
-function getMcpServerPath() {
+function getServerEntryPath() {
   const extDir = path3.dirname(path3.dirname(__filename));
   return path3.join(extDir, "dist", "mcp-server.mjs");
 }
@@ -1667,16 +1667,14 @@ var DEFAULT_HEYCURSOR_KEEPALIVE_MS = 3e5;
 var KEEPALIVE_TICK_MS = 3e4;
 function buildMessengerMcpEnv(dataDir, prevEnv) {
   const env = typeof prevEnv === "object" && prevEnv !== null ? { ...prevEnv } : {};
+  delete env.MESSENGER_INFINITE_WAIT;
   env.MESSENGER_DATA_DIR = dataDir;
-  const hasFinite = (env.MESSENGER_MAX_WAIT_MS !== void 0 && String(env.MESSENGER_MAX_WAIT_MS).trim() !== "") || (env.MESSENGER_FINITE_DEFAULT_MS !== void 0 && String(env.MESSENGER_FINITE_DEFAULT_MS).trim() !== "");
-  if (!hasFinite && (env.MESSENGER_INFINITE_WAIT === void 0 || String(env.MESSENGER_INFINITE_WAIT).trim() === ""))
-    env.MESSENGER_INFINITE_WAIT = "1";
   return env;
 }
 function buildMessengerMcpEntry(dataDir, prevEntry) {
   return {
     command: "node",
-    args: [getMcpServerPath()],
+    args: [getServerEntryPath()],
     env: buildMessengerMcpEnv(dataDir, prevEntry?.env)
   };
 }
@@ -2370,16 +2368,19 @@ function activate(context) {
   if (keepaliveMs != null) {
     keepaliveTimer = setInterval(() => {
       try {
-        const fp = path3.join(getDataDir(), "current_session.json");
-        if (!fs3.existsSync(fp))
-          return;
-        const o = JSON.parse(fs3.readFileSync(fp, "utf8"));
-        const tag = o?.session_tag;
-        if (typeof tag !== "string" || !tag)
-          return;
-        if (!shouldSendKeepalive(tag, keepaliveMs))
-          return;
-        enqueueKeepalive(tag);
+        const activityMap = readSessionActivityMap();
+        const now = Date.now();
+        const ACTIVE_THRESHOLD_MS = 36e5;
+        const activeTags = Object.keys(activityMap).filter((tag) => {
+          const a = activityMap[tag];
+          if (!a || typeof a !== "object") return false;
+          const startedAt = typeof a.last_check_messages_started_at === "string" ? Date.parse(a.last_check_messages_started_at) : NaN;
+          return Number.isFinite(startedAt) && now - startedAt < ACTIVE_THRESHOLD_MS;
+        });
+        for (const tag of activeTags) {
+          if (shouldSendKeepalive(tag, keepaliveMs))
+            enqueueKeepalive(tag);
+        }
       } catch {
       }
     }, KEEPALIVE_TICK_MS);

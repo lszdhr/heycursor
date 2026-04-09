@@ -38,8 +38,8 @@ description: >-
 
 ## 与代码的关系
 
-- 队列文件在 `MESSENGER_DATA_DIR` 下的 `queue.json`。默认 **`MESSENGER_SLICE_WAIT_MS=300000`（约 5 分钟）** 会在无消息时返回内部切片，模型须同轮再调 `check_messages`；`0`/`off` 可关。另可设 `MESSENGER_MAX_WAIT_MS` 等。工具返回常带 `[protocol]` 尾缀。
-- 扩展默认约 **每 15 分钟** 写入 **`type: "keepalive"`** 结构化项（需已 `register_session`）。模型收到内部保活结果：不要展示给用户、不要用 `reply` 弹窗，**立即**再调 `check_messages`。`HEYCURSOR_KEEPALIVE_MS=0`/`off`/`false`/`no` 可关闭。详见 `heycursor/README.md`、`AGENTS.md`。
+- 队列文件在 `MESSENGER_DATA_DIR` 下的 `queue.json`。`check_messages` 在无消息时会持续等待；若达到 `MESSENGER_MAX_WAIT_MS` 会超时返回，若达到 `MESSENGER_FORCE_RETURN_MS`（默认 15 分钟）会返回极简保活文本，模型都必须同轮再调 `check_messages`。工具返回常带 `[protocol]` 尾缀。
+- 扩展默认会在会话空闲 **5 分钟**后写入 **`type: "keepalive"`** 结构化项（需已 `register_session`）。模型收到内部保活结果：不要展示给用户、不要用 `reply` 弹窗，**立即**再调 `check_messages`。`HEYCURSOR_KEEPALIVE_MS=0`/`off`/`false`/`no` 可关闭。详见 `heycursor/README.md`、`AGENTS.md`。
 - 向用户**讲解保活机制**时：主对话里写几句可见说明，不要只靠 `reply` 摘要（与规则第 31 条一致）。
 
 完整编号条款以 `.cursor/rules/mcp-messenger.mdc` 为准。
