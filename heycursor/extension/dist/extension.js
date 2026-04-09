@@ -293,16 +293,16 @@ function sessionsForWebviewDropdown() {
       }
     );
   };
-  pushTag(getAiRegisteredSessionId());
-  pushTag(getManualSessionOverrideTag());
   const recent = [...full].sort((a, b) => {
     const ta = typeof a?.updated_at === "string" ? Date.parse(a.updated_at) : 0;
     const tb = typeof b?.updated_at === "string" ? Date.parse(b.updated_at) : 0;
     return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
   });
-  for (const row of recent.slice(0, 3)) {
+  for (const row of recent.slice(0, 5)) {
     pushTag(row?.session_tag);
   }
+  pushTag(getAiRegisteredSessionId());
+  pushTag(getManualSessionOverrideTag());
   return out;
 }
 var lastSessionStateJson = "";
