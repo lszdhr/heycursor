@@ -1864,14 +1864,15 @@ function startPolling() {
       mainPanel.webview.postMessage({ type: "clearQuestion" });
       lastQuestionId = void 0;
     }
+    const sid = getCurrentSessionId();
     const reply = readReply();
-    if (reply && reply.timestamp !== lastReplyTimestamp) {
+    const replyMatchesSession = reply && (!reply.session_tag || reply.session_tag === sid);
+    if (replyMatchesSession && reply.timestamp !== lastReplyTimestamp) {
       mainPanel.webview.postMessage({ type: "showReply", data: reply });
       lastReplyTimestamp = reply.timestamp;
-    } else if (!reply) {
+    } else if (!reply || !replyMatchesSession) {
       lastReplyTimestamp = void 0;
     }
-    const sid = getCurrentSessionId();
     const queue = readQueue(sid);
     const count = queue.length;
     void maybePromptRecovery(sid);
@@ -2324,16 +2325,21 @@ function activate(context) {
   const folders = vscode.workspace.workspaceFolders ?? [];
   setWorkspaceInfo(getWorkspaceName(), getWorkspacePath());
   startLocalServer(
-    () => ({
-      queueCount: getQueueCount(getCurrentSessionId()),
-      queue: readQueue(getCurrentSessionId()),
+    () => {
+      const _sid = getCurrentSessionId();
+      const _reply = readReply();
+      const _filteredReply = _reply && (!_reply.session_tag || _reply.session_tag === _sid) ? _reply : null;
+      return {
+      queueCount: getQueueCount(_sid),
+      queue: readQueue(_sid),
       question: readQuestion(),
-      reply: readReply(),
+      reply: _filteredReply,
       progress: readProgress(),
       workspace: { name: getWorkspaceName(), path: getWorkspacePath() },
       wsClients: getConnectedClients(),
       port: getServerPort()
-    }),
+    };
+    },
     {
       sendText: (text) => {
         sendText(text, getCurrentSessionId());

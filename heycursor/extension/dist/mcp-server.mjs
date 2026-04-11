@@ -21495,7 +21495,7 @@ server.tool(
     if (reply) {
       await fs.writeFile(
         REPLY_FILE,
-        JSON.stringify({ content: reply, timestamp: (/* @__PURE__ */ new Date()).toISOString() }, null, 2),
+        JSON.stringify({ content: reply, session_tag: session_tag || null, timestamp: (/* @__PURE__ */ new Date()).toISOString() }, null, 2),
         "utf-8"
       );
     }
