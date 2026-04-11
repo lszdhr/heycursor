@@ -21493,11 +21493,12 @@ server.tool(
       }
     }
     if (reply) {
-      await fs.writeFile(
-        REPLY_FILE,
-        JSON.stringify({ content: reply, session_tag: session_tag || null, timestamp: (/* @__PURE__ */ new Date()).toISOString() }, null, 2),
-        "utf-8"
-      );
+      const replyData = { content: reply, session_tag: session_tag || null, timestamp: (/* @__PURE__ */ new Date()).toISOString() };
+      await fs.writeFile(REPLY_FILE, JSON.stringify(replyData, null, 2), "utf-8");
+      if (session_tag) {
+        const perSessionReplyFile = path.join(DATA_DIR, `reply_${session_tag}.json`);
+        await fs.writeFile(perSessionReplyFile, JSON.stringify(replyData, null, 2), "utf-8");
+      }
     }
     const waitStart = Date.now();
     let nextHeartbeatAt = Date.now() + HEARTBEAT_INTERVAL;

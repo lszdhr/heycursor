@@ -589,6 +589,18 @@ function cancelQuestion() {
   }));
   writeAnswer({ id: q.id, answers });
 }
+function readReplyForSession(sessionTag) {
+  if (sessionTag) {
+    const perFile = path.join(getDataDir(), `reply_${sessionTag}.json`);
+    if (fs.existsSync(perFile)) {
+      try {
+        const data = JSON.parse(fs.readFileSync(perFile, "utf-8"));
+        if (data?.content != null) return data;
+      } catch {}
+    }
+  }
+  return null;
+}
 function readReply() {
   const file = replyFile();
   if (!fs.existsSync(file))
@@ -1883,12 +1895,13 @@ function startPolling() {
       lastQuestionId = void 0;
     }
     const sid = getCurrentSessionId();
-    const reply = readReply();
+    const reply = readReplyForSession(sid) || readReply();
     const replyMatchesSession = reply && (!reply.session_tag || reply.session_tag === sid);
     if (replyMatchesSession && reply.timestamp !== lastReplyTimestamp) {
       mainPanel.webview.postMessage({ type: "showReply", data: reply });
       lastReplyTimestamp = reply.timestamp;
-    } else if (!reply || !replyMatchesSession) {
+    } else if (!replyMatchesSession) {
+      mainPanel.webview.postMessage({ type: "showReply", data: null });
       lastReplyTimestamp = void 0;
     }
     const queue = readQueue(sid);
@@ -2345,8 +2358,8 @@ function activate(context) {
   startLocalServer(
     () => {
       const _sid = getCurrentSessionId();
-      const _reply = readReply();
-      const _filteredReply = _reply && (!_reply.session_tag || _reply.session_tag === _sid) ? _reply : null;
+      const _sessionReply = readReplyForSession(_sid);
+      const _filteredReply = _sessionReply || (function() { const r = readReply(); return r && (!r.session_tag || r.session_tag === _sid) ? r : null; })();
       return {
       queueCount: getQueueCount(_sid),
       queue: readQueue(_sid),
