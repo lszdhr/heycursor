@@ -2,7 +2,7 @@
   "name": "heycursor",
   "displayName": "HeyCursor",
   "description": "底部面板版 Messenger，与侧栏「Cursor Messenger」可并存。扩展 ID 为 heycursor，与 cursor-mcp-messenger 不同；共用同一 MCP（Cursor Messenger）与数据目录。",
-  "version": "1.2.0",
+  "version": "1.5.0",
   "publisher": "local",
   "license": "MIT",
   "engines": { "vscode": "^1.80.0" },

@@ -275,13 +275,30 @@ function mergeSessionsWithLabels() {
     };
   }).filter(Boolean);
 }
+function isSessionStale(tag, activityMap) {
+  const STALE_MS = 5 * 60 * 1000;
+  const a = activityMap[tag];
+  if (!a || typeof a !== "object") return false;
+  const started = typeof a.last_check_messages_started_at === "string" ? Date.parse(a.last_check_messages_started_at) : NaN;
+  const returned = typeof a.last_check_messages_returned_at === "string" ? Date.parse(a.last_check_messages_returned_at) : NaN;
+  if (!Number.isFinite(returned)) return false;
+  const stillPolling = Number.isFinite(started) && started > returned;
+  if (stillPolling) return false;
+  return Date.now() - returned > STALE_MS;
+}
 function sessionsForWebviewDropdown() {
   const full = mergeSessionsWithLabels();
+  const activityMap = readSessionActivityMap();
+  const currentSid = getCurrentSessionId();
+  const aiSid = getAiRegisteredSessionId();
+  const manualSid = getManualSessionOverrideTag();
   const byTag = new Map(full.map((s) => [s.session_tag, s]));
   const out = [];
   const seen = /* @__PURE__ */ new Set();
-  const pushTag = (tag) => {
+  const pushTag = (tag, force) => {
     if (typeof tag !== "string" || !tag || seen.has(tag))
+      return;
+    if (!force && isSessionStale(tag, activityMap))
       return;
     seen.add(tag);
     const row = byTag.get(tag);
@@ -299,10 +316,11 @@ function sessionsForWebviewDropdown() {
     return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
   });
   for (const row of recent) {
-    pushTag(row?.session_tag);
+    pushTag(row?.session_tag, false);
   }
-  pushTag(getAiRegisteredSessionId());
-  pushTag(getManualSessionOverrideTag());
+  pushTag(aiSid, true);
+  pushTag(manualSid, true);
+  if (currentSid) pushTag(currentSid, true);
   return out;
 }
 var lastSessionStateJson = "";
