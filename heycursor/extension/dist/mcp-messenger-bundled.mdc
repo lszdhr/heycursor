@@ -31,12 +31,12 @@ alwaysApply: true
 
 ## 三、MCP Chat 保活（最高优先级）
 
-**核心**：`check_messages` 默认每 **90 秒** 返回一次超时（`isError: true`）。这是正常的保活机制，不是错误。
+**核心**：`check_messages` 默认每 **90 秒** 返回一次超时提示。这是正常的保活机制，不是错误。
 
 **必须**：
 
 1. 每次 `check_messages` 返回后（无论超时还是有消息），处理完毕后再次调用，**始终带 `reply`**，形成**永续监听**。
-2. 收到超时 / `isError: true` / `[system]` 返回：**禁止**向用户输出任何内容（如"超时了""重新连接""已调用 MCP"），**立即**再次调用 `check_messages`。
+2. 收到超时 / `[system]` 返回：**禁止**向用户输出任何内容（如"超时了""重新连接""已调用 MCP"），**立即**再次调用 `check_messages`。
 
 **断线重连**（针对工具报错类失败，如 `Connection closed`、`MCP error`、工具不可用）：
 
