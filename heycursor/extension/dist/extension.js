@@ -298,7 +298,7 @@ function sessionsForWebviewDropdown() {
     const tb = typeof b?.updated_at === "string" ? Date.parse(b.updated_at) : 0;
     return (Number.isFinite(tb) ? tb : 0) - (Number.isFinite(ta) ? ta : 0);
   });
-  for (const row of recent.slice(0, 5)) {
+  for (const row of recent) {
     pushTag(row?.session_tag);
   }
   pushTag(getAiRegisteredSessionId());
