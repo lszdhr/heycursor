@@ -322,12 +322,13 @@ body {
 
 /* ========== Question Box ========== */
 .question-box {
+  order: -1;
   padding: 16px;
-  margin-top: 8px;
-  background: linear-gradient(135deg, #150f22, #1a1230);
-  border: 1.5px solid #4c3575;
+  margin-bottom: 4px;
+  background: linear-gradient(135deg, #1a1230, #1f1540);
+  border: 1.5px solid #7c3aed;
   border-radius: 14px;
-  box-shadow: 0 4px 24px rgba(124, 58, 237, 0.1);
+  box-shadow: 0 4px 24px rgba(124, 58, 237, 0.18), 0 0 0 1px rgba(124, 58, 237, 0.06);
   animation: questionSlideIn 0.3s ease-out;
 }
 @keyframes questionSlideIn {
