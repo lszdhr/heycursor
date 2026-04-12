@@ -263,10 +263,22 @@ function mergeSessionsWithLabels() {
 function isSessionStale(tag, activityMap) {
   const STALE_MS = 5 * 60 * 1000;
   const a = activityMap[tag];
-  if (!a || typeof a !== "object") return false;
+  if (!a || typeof a !== "object") {
+    const known = readKnownSessionsList().find((item) => item && item.session_tag === tag);
+    const updatedAt = known?.updated_at ? Date.parse(known.updated_at) : NaN;
+    return Number.isFinite(updatedAt) && Date.now() - updatedAt > STALE_MS;
+  }
   const started = typeof a.last_check_messages_started_at === "string" ? Date.parse(a.last_check_messages_started_at) : NaN;
   const returned = typeof a.last_check_messages_returned_at === "string" ? Date.parse(a.last_check_messages_returned_at) : NaN;
-  if (!Number.isFinite(returned)) return false;
+  if (!Number.isFinite(returned)) {
+    const fallback = Number.isFinite(started) ? started : NaN;
+    if (!Number.isFinite(fallback)) {
+      const known = readKnownSessionsList().find((item) => item && item.session_tag === tag);
+      const updatedAt = known?.updated_at ? Date.parse(known.updated_at) : NaN;
+      return Number.isFinite(updatedAt) && Date.now() - updatedAt > STALE_MS;
+    }
+    return Date.now() - fallback > STALE_MS;
+  }
   const stillPolling = Number.isFinite(started) && started > returned;
   if (stillPolling) return false;
   return Date.now() - returned > STALE_MS;
