@@ -325,6 +325,8 @@ body {
   order: -1;
   padding: 16px;
   margin-bottom: 4px;
+  max-height: 60vh;
+  overflow-y: auto;
   background: linear-gradient(135deg, #1a1230, #1f1540);
   border: 1.5px solid #7c3aed;
   border-radius: 14px;

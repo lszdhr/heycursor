@@ -1882,7 +1882,10 @@ function startPolling() {
     if (!mainPanel)
       return;
     const question = readQuestion();
-    if (question) {
+    const qSid = getCurrentSessionId();
+    const qActivityMap = readSessionActivityMap();
+    const qSessionDead = qSid && isSessionStale(qSid, qActivityMap);
+    if (question && !qSessionDead) {
       if (question.id !== lastQuestionId) {
         mainPanel.webview.postMessage({
           type: "showQuestion",
@@ -1890,9 +1893,12 @@ function startPolling() {
         });
         lastQuestionId = question.id;
       }
-    } else if (lastQuestionId) {
+    } else if (lastQuestionId || (question && qSessionDead)) {
       mainPanel.webview.postMessage({ type: "clearQuestion" });
       lastQuestionId = void 0;
+      if (question && qSessionDead) {
+        try { fs.unlinkSync(questionFile()); } catch {}
+      }
     }
     const sid = getCurrentSessionId();
     const reply = readReplyForSession(sid) || readReply();
