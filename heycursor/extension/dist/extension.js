@@ -2261,11 +2261,31 @@ var MessengerViewProvider = class {
       };
       setTimeout(ensureDeleteButton, 0);
     });
+    function ensureCopyOpeningButton() {
+      const buttons = document.querySelector(".buttons");
+      if (!buttons) return;
+      if (buttons.querySelector(".copy-opening-btn")) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "copy-opening-btn";
+      btn.textContent = "\u590D\u5236\u5F00\u5934\u8BED";
+      btn.title = "\u590D\u5236\u201C\u8FDE\u63A5cursor messenger mcp\uFF0C\u63A5\u6536\u6D88\u606F\u201D\u5230\u526A\u8D34\u677F";
+      btn.addEventListener("click", function() {
+        navigator.clipboard.writeText("\u8FDE\u63A5cursor messenger mcp\uFF0C\u63A5\u6536\u6D88\u606F").then(function() {
+          var orig = btn.textContent;
+          btn.textContent = "\u2713 \u5DF2\u590D\u5236";
+          setTimeout(function() { btn.textContent = orig; }, 1500);
+        });
+      });
+      buttons.appendChild(btn);
+    }
     const observer = new MutationObserver(function() {
       ensureDeleteButton();
+      ensureCopyOpeningButton();
     });
     window.addEventListener("load", function() {
       ensureDeleteButton();
+      ensureCopyOpeningButton();
       observer.observe(document.body, { childList: true, subtree: true });
     });
   })();
