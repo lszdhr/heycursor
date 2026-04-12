@@ -2291,13 +2291,34 @@ var MessengerViewProvider = class {
       });
       buttons.appendChild(btn);
     }
+    function ensureSummaryButton() {
+      const buttons = document.querySelector(".buttons");
+      if (!buttons) return;
+      if (buttons.querySelector(".summary-btn")) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "summary-btn";
+      btn.textContent = "\u603B\u7ED3\u4E0A\u4E0B\u6587";
+      btn.title = "\u8BA9\u6A21\u578B\u603B\u7ED3\u5F53\u524D\u5BF9\u8BDD\u7684\u4E0A\u4E0B\u6587";
+      btn.addEventListener("click", function() {
+        var api = getApi();
+        if (!api) return;
+        api.postMessage({ type: "sendText", text: "[system-command:summarize] \u8BF7\u603B\u7ED3\u5F53\u524D\u5BF9\u8BDD\u7684\u4E0A\u4E0B\u6587\uFF0C\u5305\u62EC\uFF1A1. \u8BA8\u8BBA\u7684\u4E3B\u9898\u548C\u76EE\u6807\uFF1B2. \u5DF2\u5B8C\u6210\u7684\u5173\u952E\u51B3\u7B56\u548C\u7ED3\u8BBA\uFF1B3. \u5F85\u529E\u4E8B\u9879\u3002\u8F93\u51FA\u7B80\u6D01\u7684\u4E2D\u6587\u6458\u8981\u3002" });
+        var orig = btn.textContent;
+        btn.textContent = "\u2713 \u5DF2\u53D1\u9001";
+        setTimeout(function() { btn.textContent = orig; }, 2000);
+      });
+      buttons.appendChild(btn);
+    }
     const observer = new MutationObserver(function() {
       ensureDeleteButton();
       ensureCopyOpeningButton();
+      ensureSummaryButton();
     });
     window.addEventListener("load", function() {
       ensureDeleteButton();
       ensureCopyOpeningButton();
+      ensureSummaryButton();
       observer.observe(document.body, { childList: true, subtree: true });
     });
   })();
