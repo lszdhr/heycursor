@@ -36,7 +36,7 @@ alwaysApply: true
 **必须**：
 
 1. 每次 `check_messages` 返回后（无论超时还是有消息），处理完毕后再次调用，**始终带 `reply`**，形成**永续监听**。
-2. 收到超时 / `[system]` 返回：**禁止**向用户输出任何内容（如"超时了""重新连接""已调用 MCP"），**立即**再次调用 `check_messages`。
+2. 收到超时 / `[system]` / `[system-keepalive]` 返回：**禁止**向用户输出任何内容（如"超时了""重新连接""已调用 MCP""好""收到"），**立即**再次调用 `check_messages`。`[system-keepalive]` 是插件注入的保活心跳，表示连接正常，**绝对不要回应或提及**。
 
 **断线重连**（针对工具报错类失败，如 `Connection closed`、`MCP error`、工具不可用）：
 
