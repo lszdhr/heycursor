@@ -21136,10 +21136,25 @@ function filterQueueBySession(queue, sessionTag) {
     return queue;
   return queue.filter((item) => item.session_id == null || item.session_id === sessionTag);
 }
+var _writeQueueLock = Promise.resolve();
 async function writeQueue(items) {
-  const tmp = `${QUEUE_FILE}.tmp.${process.pid}.${Date.now()}`;
-  await fs.writeFile(tmp, JSON.stringify(items, null, 2), "utf-8");
-  await fs.rename(tmp, QUEUE_FILE);
+  const release = _writeQueueLock;
+  let _resolve;
+  _writeQueueLock = new Promise((r) => { _resolve = r; });
+  await release;
+  try {
+    const tmp = `${QUEUE_FILE}.tmp.${process.pid}.${Date.now()}`;
+    const data = JSON.stringify(items, null, 2);
+    try {
+      await fs.writeFile(tmp, data, "utf-8");
+      await fs.rename(tmp, QUEUE_FILE);
+    } catch {
+      await fs.writeFile(QUEUE_FILE, data, "utf-8");
+      try { await fs.unlink(tmp); } catch {}
+    }
+  } finally {
+    _resolve();
+  }
 }
 async function readKnownSessionsList() {
   try {
