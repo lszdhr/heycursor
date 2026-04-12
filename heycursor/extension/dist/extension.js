@@ -245,21 +245,6 @@ function autoLabelFromFilePath(filePath) {
   return summarizeSessionLabelText(base);
 }
 function maybeAutoLabelSession(sessionId, labelText) {
-  if (typeof sessionId !== "string" || !sessionId)
-    return;
-  const nextLabel = summarizeSessionLabelText(labelText);
-  if (!nextLabel)
-    return;
-  const labels = readSessionLabels();
-  const existing = typeof labels[sessionId] === "string" ? labels[sessionId].trim() : "";
-  if (existing)
-    return;
-  const known = readKnownSessionsList().find((item) => item && item.session_tag === sessionId);
-  const knownLabel = typeof known?.label === "string" ? known.label.trim() : "";
-  if (knownLabel && knownLabel !== sessionId)
-    return;
-  labels[sessionId] = nextLabel;
-  writeSessionLabels(labels);
 }
 function mergeSessionsWithLabels() {
   const list = readKnownSessionsList();
@@ -318,9 +303,9 @@ function sessionsForWebviewDropdown() {
   for (const row of recent) {
     pushTag(row?.session_tag, false);
   }
-  pushTag(aiSid, true);
-  pushTag(manualSid, true);
-  if (currentSid) pushTag(currentSid, true);
+  pushTag(aiSid, false);
+  pushTag(manualSid, false);
+  if (currentSid) pushTag(currentSid, false);
   return out;
 }
 var lastSessionStateJson = "";
