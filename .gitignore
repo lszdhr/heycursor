@@ -9,3 +9,8 @@ _m110.zip
 _peek.js
 _tabctx*.js
 _tabout.txt
+
+# 扩展打包产物 / 旧备份 / 依赖兜底（不入库）
+*.vsix
+extension_backup_*/
+**/node_modules/

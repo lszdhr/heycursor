@@ -3,10 +3,11 @@
     "Cursor Messenger": {
       "command": "node",
       "args": [
-        "c:\\Users\\lsz\\.cursor\\extensions\\local.cursor-mcp-messenger-1.1.2\\dist\\mcp-server.mjs"
+        "/Users/lszhyj/.cursor/extensions/local.heycursor-1.6.0/dist/mcp-server.mjs"
       ],
       "env": {
-        "MESSENGER_DATA_DIR": "C:\\Users\\lsz\\.cursor-mcp-messenger\\fee31d2c567f"
+        "MESSENGER_DATA_DIR": "/Users/lszhyj/.cursor-mcp-messenger/7e54242c0104",
+        "MESSENGER_MAX_WAIT_MS": "90000"
       }
     }
   }

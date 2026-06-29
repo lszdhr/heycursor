@@ -11,7 +11,7 @@ description: >-
 
 ## 何时适用
 
-- 对话中启用了 **Cursor Messenger**（或 Windsurf 等价）MCP。
+- 对话中启用了 **Cursor Messenger**MCP。
 - 用户通过**插件侧栏**发消息、或明确在测 MCP / 队列 / 保活。
 
 ## 非协商规则
