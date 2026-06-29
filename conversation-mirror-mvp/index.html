@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>heycursor 对话镜像 MVP (P1 第一刀)</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font: 14px/1.5 -apple-system, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+      background: #0f1115; color: #e6e6e6;
+    }
+    header { padding: 12px 16px; border-bottom: 1px solid #2a2f3a; background: #151922; position: sticky; top: 0; }
+    h1 { font-size: 15px; margin: 0 0 8px; font-weight: 600; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    input, select, button {
+      font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid #2a2f3a;
+      background: #0f1115; color: #e6e6e6;
+    }
+    input { min-width: 280px; }
+    button { cursor: pointer; background: #1f6feb; border-color: #1f6feb; color: #fff; }
+    button.secondary { background: #232834; border-color: #2a2f3a; color: #cfd6e4; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .pill { font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid #2a2f3a; }
+    .pill.live { background: #103a1e; border-color: #1c6b35; color: #7ee2a0; }
+    .pill.off { background: #3a1010; border-color: #6b1c1c; color: #e29090; }
+    main { padding: 16px; display: grid; grid-template-columns: 2fr 1fr; gap: 16px; }
+    section { border: 1px solid #2a2f3a; border-radius: 12px; overflow: hidden; }
+    section > h2 { font-size: 12px; margin: 0; padding: 8px 12px; background: #151922; color: #9aa4b5; font-weight: 600; }
+    #assistant { padding: 12px; white-space: pre-wrap; word-break: break-word; min-height: 220px; }
+    #tools, #log { padding: 8px 12px; font-size: 12px; max-height: 360px; overflow: auto; }
+    .tool { padding: 6px 8px; border: 1px solid #2a2f3a; border-radius: 8px; margin-bottom: 6px; }
+    .tool .name { color: #9ecbff; font-weight: 600; }
+    .tool .inp { color: #9aa4b5; white-space: pre-wrap; word-break: break-word; }
+    .muted { color: #6b7280; }
+    .log-line { border-bottom: 1px dashed #232834; padding: 2px 0; }
+    .gen { color: #c08bff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>heycursor 对话镜像 MVP · P1 第一刀（只读对话流出口）</h1>
+    <div class="row">
+      <input id="base" value="http://127.0.0.1:8080" title="cursor2api 基址" />
+      <button class="secondary" id="loadBtn">拉取 Composer 列表</button>
+      <select id="composer" title="选择要镜像的 Composer"><option value="">(先拉取列表)</option></select>
+      <label class="row" style="gap:4px"><input type="checkbox" id="incTool" checked style="min-width:auto" />工具</label>
+      <label class="row" style="gap:4px"><input type="checkbox" id="incStatus" checked style="min-width:auto" />状态</label>
+      <button id="connectBtn">连接</button>
+      <button class="secondary" id="disconnectBtn" disabled>断开</button>
+      <button class="secondary" id="fallbackBtn" title="流停滞时取快照兜底">快照兜底</button>
+      <span id="state" class="pill off">离线</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <input id="sendText" placeholder="向所选 Composer 发消息（通道 A：注入 submit）…" style="flex:1; min-width:320px" />
+      <button id="sendBtn" title="经 cursor2api 注入到指定 Composer">发送</button>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2>助手对话（textDelta 实时增量）</h2>
+      <div id="assistant"><span class="muted">连接后将镜像该 Composer 的助手输出…</span></div>
+    </section>
+    <section>
+      <h2>工具调用</h2>
+      <div id="tools"><span class="muted">无</span></div>
+    </section>
+  </main>
+  <section style="margin:0 16px 16px">
+    <h2>事件日志</h2>
+    <div id="log"></div>
+  </section>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let es = null;
+    let lastEventId = 0;
+    let assistantText = "";
+    let currentGen = "";
+
+    function setState(live) {
+      const el = $("state");
+      el.textContent = live ? "在线" : "离线";
+      el.className = "pill " + (live ? "live" : "off");
+      $("connectBtn").disabled = live;
+      $("disconnectBtn").disabled = !live;
+    }
+    function log(kind, obj) {
+      const div = document.createElement("div");
+      div.className = "log-line";
+      const gen = obj && obj.generation_uuid ? ` <span class="gen">[${String(obj.generation_uuid).slice(0,8)}]</span>` : "";
+      div.innerHTML = `<b>${kind}</b>${gen} <span class="muted">${JSON.stringify(obj).slice(0,200)}</span>`;
+      const box = $("log");
+      box.prepend(div);
+      while (box.childNodes.length > 200) box.removeChild(box.lastChild);
+    }
+    function renderAssistant() {
+      $("assistant").textContent = assistantText || "（暂无文本）";
+    }
+    function addTool(t) {
+      if ($("tools").querySelector(".muted")) $("tools").innerHTML = "";
+      const d = document.createElement("div");
+      d.className = "tool";
+      d.innerHTML = `<div class="name">${t.name || "(tool)"} <span class="muted">${t.call_id || ""}</span></div>` +
+                    `<div class="inp">${(t.input_preview || "").replace(/</g,"&lt;")}</div>`;
+      $("tools").prepend(d);
+    }
+    function resetView() {
+      assistantText = ""; currentGen = ""; lastEventId = 0;
+      $("tools").innerHTML = '<span class="muted">无</span>';
+      $("log").innerHTML = "";
+      renderAssistant();
+    }
+
+    async function loadComposers() {
+      const base = $("base").value.replace(/\/$/, "");
+      try {
+        const r = await fetch(base + "/internal/heycursor/composers");
+        const j = await r.json();
+        const sel = $("composer");
+        sel.innerHTML = "";
+        (j.composers || []).forEach((c) => {
+          const o = document.createElement("option");
+          o.value = c.composer_id;
+          o.textContent = `${c.composer_id.slice(0,18)}… · ${c.status || "?"} · bubbles=${c.ai_bubble_count}`;
+          sel.appendChild(o);
+        });
+        if (!sel.options.length) sel.innerHTML = '<option value="">(无已观测的 Composer)</option>';
+        log("composers", { count: (j.composers || []).length });
+      } catch (e) { log("error", { where: "loadComposers", msg: String(e) }); }
+    }
+
+    function connect() {
+      const base = $("base").value.replace(/\/$/, "");
+      const composer = $("composer").value;
+      if (!composer) { alert("请先选择一个 Composer"); return; }
+      const include = ["text"];
+      if ($("incTool").checked) include.push("tool");
+      if ($("incStatus").checked) include.push("status");
+      resetView();
+      const url = base + "/internal/heycursor/conversation/stream?composer_id=" +
+        encodeURIComponent(composer) + "&include=" + include.join(",") +
+        "&after_event_id=" + lastEventId;
+      es = new EventSource(url);
+      es.addEventListener("snapshot", (ev) => {
+        const d = JSON.parse(ev.data);
+        if (d.last_ai_text) { assistantText = d.last_ai_text; renderAssistant(); }
+        lastEventId = d.latest_event_id || lastEventId;
+        log("snapshot", d);
+      });
+      es.addEventListener("delta", (ev) => {
+        const d = JSON.parse(ev.data);
+        lastEventId = d.event_id || lastEventId;
+        if (d.generation_uuid && d.generation_uuid !== currentGen) {
+          currentGen = d.generation_uuid; // new turn → start fresh assistant text
+          assistantText = "";
+        }
+        if (d.kind === "text") { assistantText += (d.text || ""); renderAssistant(); }
+        else if (d.kind === "tool" && d.tool) { addTool(d.tool); }
+        else if (d.kind === "thinking") { log("thinking", d); }
+      });
+      es.addEventListener("done", (ev) => log("done", JSON.parse(ev.data)));
+      es.addEventListener("status", (ev) => log("status", JSON.parse(ev.data)));
+      es.onopen = () => setState(true);
+      es.onerror = () => { setState(false); log("error", { where: "EventSource", note: "连接中断，浏览器将自动重连" }); };
+    }
+
+    function disconnect() { if (es) { es.close(); es = null; } setState(false); }
+
+    async function fallback() {
+      const base = $("base").value.replace(/\/$/, "");
+      const composer = $("composer").value;
+      if (!composer) return;
+      try {
+        const r = await fetch(base + "/internal/heycursor/conversation/events?composer_id=" +
+          encodeURIComponent(composer) + "&after_event_id=" + lastEventId);
+        const j = await r.json();
+        if (j.snapshot && j.snapshot.last_ai_text) { assistantText = j.snapshot.last_ai_text; renderAssistant(); }
+        (j.events || []).forEach((d) => {
+          lastEventId = d.event_id || lastEventId;
+          if (d.kind === "text") assistantText += (d.text || "");
+          else if (d.kind === "tool" && d.tool) addTool(d.tool);
+        });
+        renderAssistant();
+        log("fallback", { got: (j.events || []).length, done: j.done });
+      } catch (e) { log("error", { where: "fallback", msg: String(e) }); }
+    }
+
+    async function send() {
+      const base = $("base").value.replace(/\/$/, "");
+      const composer = $("composer").value;
+      const text = $("sendText").value;
+      if (!composer) { alert("请先选择一个 Composer"); return; }
+      if (!text.trim()) return;
+      try {
+        const r = await fetch(base + "/internal/heycursor/conversation/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ composer_id: composer, text }),
+        });
+        const j = await r.json();
+        log("send", j);
+        if (j.ok) $("sendText").value = "";
+      } catch (e) { log("error", { where: "send", msg: String(e) }); }
+    }
+
+    $("loadBtn").onclick = loadComposers;
+    $("connectBtn").onclick = connect;
+    $("disconnectBtn").onclick = disconnect;
+    $("fallbackBtn").onclick = fallback;
+    $("sendBtn").onclick = send;
+    $("sendText").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "composerInput": [
+    { "strategy": "aria", "selector": "[role=\"textbox\"]" },
+    { "strategy": "contenteditable", "selector": "[contenteditable=\"true\"]" },
+    { "strategy": "dom-structure", "selector": ".editor-instance textarea" },
+    { "strategy": "css-class", "selector": ".composer-input" }
+  ],
+  "composerSpinner": [
+    { "strategy": "aria", "selector": "[aria-label=\"Loading\"]" },
+    { "strategy": "css-class", "selector": ".codicon-loading" },
+    { "strategy": "css-class", "selector": ".codicon-sync~spin" }
+  ],
+  "composerStopButton": [
+    { "strategy": "aria", "selector": "[aria-label=\"Cancel\"]" },
+    { "strategy": "aria", "selector": "[aria-label=\"Stop\"]" },
+    { "strategy": "css-class", "selector": ".stop-button" }
+  ],
+  "composerContainer": [
+    { "strategy": "aria", "selector": "[role=\"complementary\"]" },
+    { "strategy": "css-class", "selector": ".composer-panel" },
+    { "strategy": "dom-structure", "selector": ".sidebar .pane-body" }
+  ]
+}

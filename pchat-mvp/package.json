@@ -1,0 +1,19 @@
+{
+  "name": "pchat-mvp",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "HeyCursor Commander-Worker MVP — multi-agent orchestration for Cursor Composer sessions.",
+  "scripts": {
+    "test": "node --test 'test/**/*.test.mjs'",
+    "check": "node --check src/core/store.mjs && node --check src/core/persistence.mjs && node --check src/core/task-engine.mjs && node --check src/core/workgroup.mjs && node --check src/mcp-server.mjs && node --check src/local-ui.mjs && node --check src/cli.mjs && node --check src/cdp-driver.mjs && node --check src/watchdog.mjs",
+    "mcp": "node src/mcp-server.mjs",
+    "ui": "node src/local-ui.mjs",
+    "send": "node src/cli.mjs send",
+    "cdp": "node -e \"import('./src/cdp-driver.mjs').then(m => m.connect(m.createCdpDriver()).then(r => console.log('CDP connected:', r)).catch(e => console.error(e.message)))\"",
+    "watchdog": "node -e \"import('./src/watchdog.mjs').then(m => { const wd = m.createWatchdog({ activeWaits: new Set() }); m.startWatchdog(wd); console.log('Watchdog started'); })\""
+  },
+  "dependencies": {
+    "playwright-core": "^1.52.0"
+  }
+}
